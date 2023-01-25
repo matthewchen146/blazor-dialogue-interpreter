@@ -6,13 +6,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>blazor-dialogue-interpreter</title>
     <base href="/blazor-dialogue-interpreter/" />
-    <link href="css/bootstrap/bootstrap.min.css" rel="stylesheet" />
+    <!-- <link href="css/bootstrap/bootstrap.min.css" rel="stylesheet" /> -->
     <link href="css/app.css" rel="stylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="blazor-dialogue-interpreter.styles.css" rel="stylesheet" />
+    <style>
+        /* .script-view .script-line {
+            text-decoration: underline;
+        } */
+
+        .script-view .token {
+            color: rgb(23, 146, 228);
+        }
+
+        .script-view .label {
+            color: rgb(245, 187, 27);
+        }
+        
+        .script-view .comment {
+            color: rgb(75, 110, 55);
+        }
+
+        .script-view .error {
+            background-color: rgba(255, 47, 47, 0.521);
+        }
+    </style>
 </head>
 
 <body>
+    <script>
+        window.dotNetReferenceMap = new Map();
+
+        window.setDotNetReference = (id, reference) => {
+            window.dotNetReferenceMap.set(id, reference);
+        }
+
+        window.getDotNetReference = (id) => {
+            return window.dotNetReferenceMap.get(id);
+        }
+
+        window.callDotNetReferenceMethod = async (id, method, ...args) => {
+            const reference = window.getDotNetReference(id);
+            let result;
+            if (reference) {
+                result = await reference.invokeMethodAsync(method, ...args);
+            }
+            return result;
+        }
+
+        window.evalJavaScript = (string) => {
+            eval(string);
+        }
+    </script>
     <div id="app">
         <svg class="loading-progress">
             <circle r="40%" cx="50%" cy="50%" />

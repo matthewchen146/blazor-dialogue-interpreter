@@ -1,151 +1,71 @@
-/* /Shared/MainLayout.razor.rz.scp.css */
-.page[b-g3x1uccqxq] {
-    position: relative;
-    display: flex;
-    flex-direction: column;
+/* /Pages/Index.razor.rz.scp.css */
+main[b-syx3o80wzq] {
+    --theme-h: 200;
+    --theme-s: 10%;
+    --theme-l: 10%;
+
+    display: grid;
+    grid-template-rows: 2em 1fr 2em;
+    height: 100vh;
+    overflow: hidden;
 }
 
-main[b-g3x1uccqxq] {
-    flex: 1;
-}
-
-.sidebar[b-g3x1uccqxq] {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
-}
-
-.top-row[b-g3x1uccqxq] {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
-    justify-content: flex-end;
-    height: 3.5rem;
-    display: flex;
-    align-items: center;
-}
-
-    .top-row[b-g3x1uccqxq]  a, .top-row[b-g3x1uccqxq]  .btn-link {
-        white-space: nowrap;
-        margin-left: 1.5rem;
-        text-decoration: none;
-    }
-
-    .top-row[b-g3x1uccqxq]  a:hover, .top-row[b-g3x1uccqxq]  .btn-link:hover {
-        text-decoration: underline;
-    }
-
-    .top-row[b-g3x1uccqxq]  a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-@media (max-width: 640.98px) {
-    .top-row:not(.auth)[b-g3x1uccqxq] {
-        display: none;
-    }
-
-    .top-row.auth[b-g3x1uccqxq] {
-        justify-content: space-between;
-    }
-
-    .top-row[b-g3x1uccqxq]  a, .top-row[b-g3x1uccqxq]  .btn-link {
-        margin-left: 0;
-    }
-}
-
-@media (min-width: 641px) {
-    .page[b-g3x1uccqxq] {
-        flex-direction: row;
-    }
-
-    .sidebar[b-g3x1uccqxq] {
-        width: 250px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
-    }
-
-    .top-row[b-g3x1uccqxq] {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-    }
-
-    .top-row.auth[b-g3x1uccqxq]  a:first-child {
-        flex: 1;
-        text-align: right;
-        width: 0;
-    }
-
-    .top-row[b-g3x1uccqxq], article[b-g3x1uccqxq] {
-        padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
-    }
-}
-/* /Shared/NavMenu.razor.rz.scp.css */
-.navbar-toggler[b-rnpywtbhfp] {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.top-row[b-rnpywtbhfp] {
-    height: 3.5rem;
-    background-color: rgba(0,0,0,0.4);
-}
-
-.navbar-brand[b-rnpywtbhfp] {
-    font-size: 1.1rem;
-}
-
-.oi[b-rnpywtbhfp] {
-    width: 2rem;
-    font-size: 1.1rem;
-    vertical-align: text-top;
-    top: -2px;
-}
-
-.nav-item[b-rnpywtbhfp] {
-    font-size: 0.9rem;
-    padding-bottom: 0.5rem;
-}
-
-    .nav-item:first-of-type[b-rnpywtbhfp] {
-        padding-top: 1rem;
-    }
-
-    .nav-item:last-of-type[b-rnpywtbhfp] {
-        padding-bottom: 1rem;
-    }
-
-    .nav-item[b-rnpywtbhfp]  a {
-        color: #d7d7d7;
-        border-radius: 4px;
-        height: 3rem;
-        display: flex;
-        align-items: center;
-        line-height: 3rem;
-    }
-
-.nav-item[b-rnpywtbhfp]  a.active {
-    background-color: rgba(255,255,255,0.25);
-    color: white;
-}
-
-.nav-item[b-rnpywtbhfp]  a:hover {
-    background-color: rgba(255,255,255,0.1);
-    color: white;
-}
-
-@media (min-width: 641px) {
-    .navbar-toggler[b-rnpywtbhfp] {
-        display: none;
-    }
-
-    .collapse[b-rnpywtbhfp] {
-        /* Never collapse the sidebar for wide screens */
-        display: block;
-    }
+.editor[b-syx3o80wzq] {
+    background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
+    /* color: white; */
+    display: grid;
     
-    .nav-scrollable[b-rnpywtbhfp] {
-        /* Allow sidebar to scroll for tall menus */
-        height: calc(100vh - 3.5rem);
-        overflow-y: auto;
-    }
+    grid-template-areas: "a b" "a c";
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 2fr;
+    overflow: hidden;
+    height: 100vh;
 }
+
+.script-container[b-syx3o80wzq] {
+    position: relative;
+    grid-area: a;
+    overflow-y: scroll;
+    overflow-x: hidden;
+
+    --font-size: 1rem;
+}
+
+.script[b-syx3o80wzq] {
+    background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
+    font-family: 'Courier New', Courier, monospace;
+    font-size: var(--font-size);
+    white-space: break-spaces;
+
+    width: 100%;
+    
+    /* min-height: 100%; */
+    overflow: hidden;
+    resize: none;
+}
+
+.script-view[b-syx3o80wzq] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    user-select: none;
+    font-size: var(--font-size);
+    white-space: break-spaces;
+
+    font-family: 'Courier New', Courier, monospace;
+    color: white;
+}
+
+.test[b-syx3o80wzq] {
+    background-color: brown;
+    grid-area: b;
+}
+
+.log[b-syx3o80wzq] {
+    background-color: goldenrod;
+    grid-area: c;
+    overflow-y: scroll;
+}
+
+/* /Shared/MainLayout.razor.rz.scp.css */
