@@ -1,0 +1,69 @@
+main {
+    --theme-h: 200;
+    --theme-s: 10%;
+    --theme-l: 10%;
+
+    display: grid;
+    grid-template-rows: 2em 1fr 2em;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.editor {
+    background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
+    /* color: white; */
+    display: grid;
+    
+    grid-template-areas: "a b" "a c";
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 2fr;
+    overflow: hidden;
+    height: 100vh;
+}
+
+.script-container {
+    position: relative;
+    grid-area: a;
+    overflow-y: scroll;
+    overflow-x: hidden;
+
+    --font-size: 1rem;
+}
+
+.script {
+    background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
+    font-family: 'Courier New', Courier, monospace;
+    font-size: var(--font-size);
+    white-space: break-spaces;
+
+    width: 100%;
+    
+    /* min-height: 100%; */
+    overflow: hidden;
+    resize: none;
+}
+
+.script-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    user-select: none;
+    font-size: var(--font-size);
+    white-space: break-spaces;
+
+    font-family: 'Courier New', Courier, monospace;
+    color: white;
+}
+
+.test {
+    background-color: brown;
+    grid-area: b;
+}
+
+.log {
+    background-color: goldenrod;
+    grid-area: c;
+    overflow-y: scroll;
+}
+

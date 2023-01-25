@@ -1,9 +1,220 @@
 ﻿@page "/"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@using System.Timers
 
-<PageTitle>Index</PageTitle>
+<PageTitle>Dialogue Interpreter</PageTitle>
 
-<h1>New Title</h1>
+<main>
+    <section class="editor">
+        <div class="script-container">
+            <textarea class="script" spellcheck="false" value="@script"></textarea>
+            <pre class="script-view"></pre>
+        </div>
+        
 
-Welcome to your new app.
+        <div class="test">testing</div>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+        <pre class="log">
+            @log
+        </pre>
+    </section>
+</main>
+
+@code
+{
+    private DialogueInterpreter dialogueInterpreter = new();
+
+    private string? script = "";
+    private string log = "";
+
+    [JSInvokable]
+    public void Log(string? message)
+    {
+        Console.WriteLine($"logging [{message}]");
+        if (message == null)
+        {
+            return;
+        }
+        log += "\n" + message;
+        base.StateHasChanged();
+    }
+
+    private void HandleClick()
+    {
+        @* int result = dialogueInterpreter.Load(script, out string error);
+
+        if (error.Length > 0)
+        {
+            Log($"ERROR - {error}");
+            return;
+        } *@
+
+        Log("nice!");
+        Console.WriteLine(script);
+    }
+
+    [JSInvokable]
+    public async void CheckScriptChange(string newScript)
+    {
+        if (newScript != script)
+        {
+            @* Console.WriteLine($"change detected \n{newScript}"); *@
+            script = newScript;
+
+            int result = dialogueInterpreter.Load(script, out string error, out int errorLine, out DialogueInterpreter.DialogueData dialogueData);
+
+            if (result == 0)
+            {
+                Log($"Dialogue Error - {error}");
+            }
+
+            string scriptViewText = "";
+
+            string[] lines = script.Split('\n');
+
+            int commandIndex = 0;
+            for (int rawLineIndex = 0; rawLineIndex < lines.Length; rawLineIndex++)
+            {
+                string classes = "script-line";
+
+                string line = lines[rawLineIndex];
+
+                if (result == 0 && rawLineIndex == errorLine - 1)
+                {
+                    classes += " error";
+                }
+                
+                if (commandIndex >= dialogueData.commands.Count || dialogueData.rawLineIndices[commandIndex] > rawLineIndex)
+                {
+                    classes += " comment";
+                }
+                else
+                {
+                    DialogueInterpreter.DialogueCommand command = dialogueData.commands[commandIndex];
+
+                    string[] words = line.Split(' ');
+                    int argIndex = -1;
+                    for (int wordIndex = 0; wordIndex < words.Length; wordIndex++)
+                    {
+                        string wordClasses = "";
+                        string word = words[wordIndex];
+                        if (word.Length == 0)
+                        {
+                            continue;
+                        }
+
+
+                        if (word[0] == '@')
+                        {
+                            wordClasses += $" token {command.token}";
+                        }
+                        else
+                        {
+                            argIndex += 1;
+                        }
+
+                        switch (command.token)
+                        {
+                            case "option":
+                            case "jump":
+                            case "label":
+                                if (argIndex == 0)
+                                {
+                                    wordClasses += " label";
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+
+                        if (wordClasses.Length > 0)
+                        {
+                            words[wordIndex] = $"<span class='{wordClasses}'>{word}</span>";
+                        }
+                        
+                    }
+                    line = string.Join(' ', words);
+
+                    commandIndex += 1;
+                }
+
+                scriptViewText += $"<span class='{classes}'>{line}</span>" + ((rawLineIndex == lines.Length - 1) ? "" : "\n");
+            }
+            
+
+            await JS.InvokeVoidAsync("setScriptViewInnerHTML", scriptViewText);
+
+        }
+
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        string text = await Http.GetStringAsync("examples/Test.txt");
+
+        script = text;     
+
+        await JS.InvokeVoidAsync("setDotNetReference", "index", DotNetObjectReference.Create(this));
+
+        await JS.InvokeVoidAsync(
+            "evalJavaScript", 
+            @"
+            (() => {
+                const textArea = document.querySelector('.script'); 
+                if (!textArea) {
+                    console.error('could not find script editor');
+                }
+
+                const scriptView = document.querySelector('.script-view');
+                
+                window.setScriptViewInnerHTML = (text) => {
+                    if (scriptView) {
+                        scriptView.innerHTML = text;
+                    }
+                }
+
+                const scriptContainer = document.querySelector('.script-container');
+                
+                function resizeView() {
+                    const scrollTop = scriptContainer.scrollTop;
+
+                    textArea.style.height = '';
+                    textArea.style.height = `${textArea.scrollHeight}px`;
+
+                    if (scriptView) {
+                        const rect = textArea.getBoundingClientRect();
+                        //scriptView.style.left = rect.x;
+                        //scriptView.style.top = rect.y;
+                        scriptView.style.width = `${rect.width}px`;
+                        scriptView.style.height = `${rect.height}px`;
+
+                        scriptView.textContent = textArea.value;
+                    }
+
+                    scriptContainer.scrollTop = scrollTop;
+                }
+
+                function checkDiff() {
+                    console.debug('calling');
+                    window.callDotNetReferenceMethod('index', 'CheckScriptChange', textArea.value);
+                }
+                
+                let scriptCheckTimeout = setTimeout(checkDiff, 500);
+
+                setTimeout(resizeView, 1);
+
+                window.addEventListener('resize', resizeView);
+
+                textArea.addEventListener('input', () => {
+                    clearTimeout(scriptCheckTimeout);
+                    scriptCheckTimeout = setTimeout(checkDiff, 200);
+
+                    resizeView();
+                });
+            })()
+            "
+        );
+    }
+
+}
