@@ -14,21 +14,33 @@ main[b-syx3o80wzq] {
     background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
     /* color: white; */
     display: grid;
-    
-    grid-template-areas: "a b" "a c";
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 2fr;
     overflow: hidden;
     height: 100vh;
 }
 
+.editor-column[b-syx3o80wzq] {
+    max-height: 100vh;
+}
+
+.editor-column.left[b-syx3o80wzq] {
+    display: grid;
+    grid-template-rows: 1rem 1fr;
+}
+
+.editor-column.right[b-syx3o80wzq] {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+}
+
 .script-container[b-syx3o80wzq] {
     position: relative;
-    grid-area: a;
     overflow-y: scroll;
     overflow-x: hidden;
 
     --font-size: 1rem;
+
+    --line-number-width: 2rem;
 }
 
 .script[b-syx3o80wzq] {
@@ -42,6 +54,8 @@ main[b-syx3o80wzq] {
     /* min-height: 100%; */
     overflow: hidden;
     resize: none;
+
+    padding-left: var(--line-number-width);
 }
 
 .script-view[b-syx3o80wzq] {
@@ -55,16 +69,72 @@ main[b-syx3o80wzq] {
 
     font-family: 'Courier New', Courier, monospace;
     color: white;
+
+    padding-left: var(--line-number-width);
 }
 
 .test[b-syx3o80wzq] {
+    position: relative;
     background-color: brown;
-    grid-area: b;
+}
+
+.dialogue-container[b-syx3o80wzq] {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    height: 100%;
+    width: 90%;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 0;
+}
+
+.dialogue-header[b-syx3o80wzq] {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+}
+
+.speaker-label[b-syx3o80wzq] {
+    background-color: hsl(var(--theme-h), var(--theme-s), 5%);
+    color: white;
+    /* height: 1rem; */
+    padding: .2rem;
+}
+
+.dialogue-box[b-syx3o80wzq] {
+    background-color: hsl(var(--theme-h), var(--theme-s), 5%);
+    color: white;
+    padding: .2rem;
+    height: 4rem;
+    width: 100%;
+}
+
+.dialogue-footer[b-syx3o80wzq] {
+    background-color: hsl(var(--theme-h), var(--theme-s), 5%);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    /* height: 1rem; */
+    width: 100%;
+}
+
+.options-container[b-syx3o80wzq] {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.option-button[b-syx3o80wzq] {
+    
 }
 
 .log[b-syx3o80wzq] {
     background-color: goldenrod;
-    grid-area: c;
     overflow-y: scroll;
 }
 
