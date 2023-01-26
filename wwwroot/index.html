@@ -11,9 +11,24 @@
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="blazor-dialogue-interpreter.styles.css" rel="stylesheet" />
     <style>
-        /* .script-view .script-line {
-            text-decoration: underline;
-        } */
+        .script-view .script-line {
+            position: relative;
+        }
+
+        .script-view .script-line::before {
+            content: attr(data-line);
+            position: absolute;
+            transform: translateX(-100%);
+            width: var(--line-number-width);
+            height: 100%;
+            color: white;
+
+            background-color: rgb(90, 69, 42);
+        }
+
+        .script-view .script-line:nth-child(even)::before {
+            background-color: rgb(161, 118, 60);
+        }
 
         .script-view .token {
             color: rgb(23, 146, 228);

@@ -7,17 +7,37 @@
 
 <main>
     <section class="editor">
-        <div class="script-container">
-            <textarea class="script" spellcheck="false" value="@script"></textarea>
-            <pre class="script-view"></pre>
-        </div>
-        
+        <section class="editor-column left">
+            <div class="script-tools">
+                <button>Export</button>
+                <button>Import</button>
+            </div>
+            <div class="script-container">
+                <textarea class="script" spellcheck="false" value="@script"></textarea>
+                <pre class="script-view"></pre>
+            </div>
+        </section>
 
-        <div class="test">testing</div>
+        <section class="editor-column right">
+            <div class="test">
+                <div class="dialogue-container">
+                    <div class="dialogue-header">
+                        <div class="speaker-label">Speaker</div>
+                    </div>
+                    <div class="dialogue-box">dialogue box</div>
+                    <div class="dialogue-footer">
+                        <button class="next-button">Next</button>
+                    </div>
+                </div>
+                <div class="options-container">
 
-        <pre class="log">
-            @log
-        </pre>
+                </div>
+            </div>
+
+            <pre class="log">
+                @log
+            </pre>
+        </section>
     </section>
 </main>
 
@@ -139,7 +159,7 @@
                     commandIndex += 1;
                 }
 
-                scriptViewText += $"<span class='{classes}'>{line}</span>" + ((rawLineIndex == lines.Length - 1) ? "" : "\n");
+                scriptViewText += $"<span class='{classes}' data-line='{rawLineIndex + 1}'>{line}</span>" + ((rawLineIndex == lines.Length - 1) ? "" : "\n");
             }
             
 
