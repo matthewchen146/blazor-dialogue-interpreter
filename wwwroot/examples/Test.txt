@@ -5,7 +5,7 @@
 @conversation Greeting
 
 // characters enter the conversation
-@enter personA personB 
+@enter personA personB
 
 // "speak" changes who is talking (changes the name in the header)
 @speak personA 

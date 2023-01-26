@@ -5,6 +5,43 @@ using System.Collections.Generic;
 #nullable enable
 public class DialogueInterpreter
 {
+    public class DialogueCommand 
+    {
+        public List<string> args = new();
+        public string token = "";
+        public int index = 0;
+        public Conversation conversation;
+        public int rawLineIndex = 0;
+        public DialogueCommand(int _index, Conversation _conversation, string _token, IEnumerable<string> _args)
+        {
+            index = _index;
+            token = _token;
+            conversation = _conversation;
+            args.AddRange(_args);
+        }
+
+    }
+
+    public class Character 
+    {
+        public string name = "";
+        public Character(string _name)
+        {
+            name = _name;
+        }
+    }
+
+    public class Conversation 
+    {
+        public Dictionary<string, Character> characters = new();
+        public Dictionary<string, int> labels = new();
+        public int index = 0;
+        public List<DialogueCommand> commands = new();
+        public Conversation(int _index)
+        {
+            index = _index;
+        }
+    }
     public class DialogueData
     {
         public List<DialogueCommand> commands = new();
@@ -68,11 +105,12 @@ public class DialogueInterpreter
         {"conversation", new CommandContainer(
             (DialogueData dialogueData, DialogueCommand command, out string error) => {
                 error = "";
-                string conversationName = "_default";
-                if (command.args.Count > 0)
+                if (command.args.Count == 0)
                 {
-                    conversationName = command.args[0];
+                    error = $"Conversation must have a name argument. Example: @conversation Greeting";
+                    return 0;
                 }
+                string conversationName = command.args[0];
                 if (dialogueData.conversations.ContainsKey(conversationName))
                 {
                     error = $"Conversation \"{conversationName}\" was already defined on line {dialogueData.rawLineIndices[dialogueData.conversations[conversationName].index] + 1}";
@@ -163,7 +201,7 @@ public class DialogueInterpreter
             (DialogueData dialogueData, DialogueCommand command, out string error) => {
                 error = "";
                 dialogueData.dialogueInterpreter.events.Trigger("speakerChanged", command.args[0]);
-                return 0;
+                return 1;
             },
             1
         )},
@@ -174,7 +212,7 @@ public class DialogueInterpreter
                 error = "";
                 dialogueData.dialogueInterpreter.events.Trigger("textChanged", command.args[0]);
                 dialogueData.dialogueInterpreter.nextReady = false;
-                return 0;
+                return 1;
             },
             1
         )},
@@ -205,9 +243,9 @@ public class DialogueInterpreter
                     dialogueData.dialogueInterpreter.currentOptions.Add(labelName);
                     dialogueData.dialogueInterpreter.events.Trigger("optionAdded", index, text, labelName);
                 }
-                if (command.index < dialogueData.dialogueInterpreter.commands.Count - 1)
+                if (command.index < dialogueData.commands.Count - 1)
                 {
-                    DialogueCommand nextCommand = dialogueData.dialogueInterpreter.commands[command.index + 1];
+                    DialogueCommand nextCommand = dialogueData.commands[command.index + 1];
                     if (nextCommand.token != "option")
                     {
                         dialogueData.dialogueInterpreter.nextReady = false;
@@ -251,78 +289,25 @@ public class DialogueInterpreter
         )}
     };
 
-    public class DialogueCommand 
-    {
-        public List<string> args = new();
-        public string token = "";
-        public int index = 0;
-        public Conversation conversation;
-        public int rawLineIndex = 0;
-        public DialogueCommand(int _index, Conversation _conversation, string _token, IEnumerable<string> _args)
-        {
-            index = _index;
-            token = _token;
-            conversation = _conversation;
-            args.AddRange(_args);
-        }
-
-    }
-
-    public class Character 
-    {
-        public string name = "";
-        public Character(string _name)
-        {
-            name = _name;
-        }
-    }
-
-    public class Conversation 
-    {
-        public Dictionary<string, Character> characters = new();
-        public Dictionary<string, int> labels = new();
-        public int index = 0;
-        public List<DialogueCommand> commands = new();
-        public Conversation(int _index)
-        {
-            index = _index;
-        }
-    }
-
-    public List<DialogueCommand> commands = new();
-    public Dictionary<string, Conversation> conversations = new(); 
-    // public Conversation currentConversation;
+    
+    private IEnumerator<int>? currentIterator;
+    public string currentIteratorError = "";
     private int currentIndex = 0;
     List<string> currentOptions = new();
-    // public Dictionary<string, Character> currentCharacters;
     public DialogueData? currentDialogueData;
-
     public EventEmitter events {get; private set;} = new();
-    
 
     private bool nextReady = false;
 
-    // Start is called before the first frame update
-    void Start()
+    public int Next()
     {
-
-        Load("", out string error, out int errorLine, out DialogueData outDialogueData);
-        if (error.Length > 0)
+        if (currentIterator == null)
         {
-            Console.WriteLine(error);
+            return 0;
         }
-
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
-    public void Next()
-    {
         nextReady = true;
+        currentIterator.MoveNext();
+        return 1;
     }
 
     public int ChooseOption(int index, out string error)
@@ -356,13 +341,13 @@ public class DialogueInterpreter
         {
             // go past last option
             int tempIndex = currentIndex + 1;
-            while (tempIndex < commands.Count)
+            while (tempIndex < currentDialogueData.commands.Count)
             {
-                DialogueCommand command = commands[tempIndex];
+                DialogueCommand command = currentDialogueData.commands[tempIndex];
 
                 if (command.token != "option")
                 {
-                    currentIndex = tempIndex;
+                    currentIndex = tempIndex - 1;
                     break;
                 }
 
@@ -372,9 +357,8 @@ public class DialogueInterpreter
 
         currentOptions.Clear();
         events.Trigger("optionsCleared");
-
-        Next();
-        return 1;
+        
+        return Next();
     }
 
     private string HasValidToken(string line, out string error)
@@ -534,51 +518,68 @@ public class DialogueInterpreter
         return Load(rawText, out _);
     }
 
-    // public int Load(TextAsset file, out string error)
-    // {
-    //     return Load(file.text, out error);
-    // }
+    private IEnumerator<int> StartDialogueEnumerator()
+    {
+        if (currentDialogueData == null)
+        {
+            yield break;
+        }
+        DialogueData dialogueData = currentDialogueData;
+        nextReady = true;
+        while (currentIndex < dialogueData.commands.Count)
+        {
+            DialogueCommand command = dialogueData.commands[currentIndex];
+            int result = possibleCommands[command.token].Resolve(dialogueData, command, out string error);
+            // Console.WriteLine($"command: {command.token}, index: {currentIndex}, result: {result}");
+            if (result == 0)
+            {
+                Console.WriteLine(error);
+                currentIteratorError = error;
+                Console.WriteLine($"breaking with error: {error}");
+                yield break;
+            }
 
-    // IEnumerator CommandResolverCoroutine()
-    // {
-    //     nextReady = true;
-    //     while (currentIndex < commands.Count)
-    //     {
-    //         DialogueCommand command = commands[currentIndex];
-    //         possibleCommands[command.token].Resolve(this, command, out string error);
-            
-    //         // if (!nextReady)
-    //         // yield return new WaitUntil(() => {
-    //         //     return nextReady;
-    //         // });
-    //         if (!nextReady) 
-    //         {
-    //             yield return null;
-    //         }
+            if (!nextReady) 
+            {
+                yield return result;
+            }
 
-    //         currentIndex += 1;
-    //     }
-    // }
+            currentIndex += 1;
+        }
 
-    // public int StartConversation(string conversationName)
-    // {
-    //     if (!conversations.ContainsKey(conversationName))
-    //     {
-    //         return 0;
-    //     }
+    }
 
-    //     currentConversation = conversations[conversationName];
+    public int StartConversation(string conversationName, out string error)
+    {
+        error = "";
+        if (currentDialogueData == null)
+        {
+            error = $"StartConversation - Dialogue Interpreter has no current dialogue";
+            return 0;
+        }
 
-    //     currentOptions.Clear();
-    //     currentIndex = 0;
+        if (!currentDialogueData.conversations.ContainsKey(conversationName))
+        {
+            error = $"StartConversation - No conversation found by the name {conversationName}";
+            return 0;
+        }
 
-    //     // if (currentCoroutine != null)
-    //     // {
-    //     //     StopCoroutine(currentCoroutine);
-    //     // }
+        // clear current options
+        currentOptions.Clear();
+        events.Trigger("optionsCleared");
 
-    //     // currentCoroutine = StartCoroutine(CommandResolverCoroutine());
+        // reset command index
+        currentIndex = 0;
 
-    //     return 1;
-    // }
+        // create enumerable
+        currentIterator = StartDialogueEnumerator();   
+
+        return Next();
+    }
+
+    public int StartConversation(string conversationName)
+    {
+        return StartConversation(conversationName, out string _);
+    }
+
 }

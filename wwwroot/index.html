@@ -23,11 +23,11 @@
             height: 100%;
             color: white;
 
-            background-color: rgb(90, 69, 42);
+            background-color: rgba(90, 69, 42, .5);
         }
 
         .script-view .script-line:nth-child(even)::before {
-            background-color: rgb(161, 118, 60);
+            background-color: rgba(161, 118, 60, .5);
         }
 
         .script-view .token {
@@ -37,13 +37,26 @@
         .script-view .label {
             color: rgb(245, 187, 27);
         }
-        
+
         .script-view .comment {
             color: rgb(75, 110, 55);
         }
 
         .script-view .error {
-            background-color: rgba(255, 47, 47, 0.521);
+            background-color: rgba(255, 47, 47, 0.5);
+        }
+
+        .log .level-1 {
+            color: rgb(255, 187, 60);
+        }
+
+        .log .level-2 {
+            color: rgb(255, 60, 60);
+        }
+
+        .option-button {
+            width: 100%;
+            padding: .2rem;
         }
     </style>
 </head>
@@ -67,6 +80,16 @@
                 result = await reference.invokeMethodAsync(method, ...args);
             }
             return result;
+        }
+
+        window.callFunction = async (functionString) => {
+            try {
+                const func = new Function(functionString);
+                func();
+            } catch (error) {
+                console.log("window.callFunction", error);
+            }
+            
         }
 
         window.evalJavaScript = (string) => {

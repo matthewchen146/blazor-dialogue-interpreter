@@ -10,12 +10,16 @@ main {
 }
 
 .editor {
-    background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
+    --editor-background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
+    background-color: var(--editor-background-color);
     /* color: white; */
     display: grid;
     grid-template-columns: 1fr 1fr;
     overflow: hidden;
     height: 100vh;
+
+    --toolbar-padding-top: .2rem;
+    --toolbar-height: calc(1rem + var(--toolbar-padding-top))
 }
 
 .editor-column {
@@ -24,12 +28,16 @@ main {
 
 .editor-column.left {
     display: grid;
-    grid-template-rows: 1rem 1fr;
+    grid-template-rows: var(--toolbar-height) 1fr;
 }
 
 .editor-column.right {
     display: grid;
     grid-template-rows: 1fr 1fr;
+}
+
+.script-tools {
+    padding-top: var(--toolbar-padding-top);
 }
 
 .script-container {
@@ -74,7 +82,7 @@ main {
 
 .test {
     position: relative;
-    background-color: brown;
+    background-color: rgb(75, 146, 194);
 }
 
 .dialogue-container {
@@ -88,6 +96,8 @@ main {
     left: 50%;
     transform: translateX(-50%);
     bottom: 0;
+
+    --dialogue-background-color: hsl(var(--theme-h), var(--theme-s), 5%);
 }
 
 .dialogue-header {
@@ -98,14 +108,14 @@ main {
 }
 
 .speaker-label {
-    background-color: hsl(var(--theme-h), var(--theme-s), 5%);
+    background-color: var(--dialogue-background-color);
     color: white;
     /* height: 1rem; */
     padding: .2rem;
 }
 
 .dialogue-box {
-    background-color: hsl(var(--theme-h), var(--theme-s), 5%);
+    background-color: var(--dialogue-background-color);
     color: white;
     padding: .2rem;
     height: 4rem;
@@ -113,7 +123,7 @@ main {
 }
 
 .dialogue-footer {
-    background-color: hsl(var(--theme-h), var(--theme-s), 5%);
+    background-color: var(--dialogue-background-color);
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -126,14 +136,27 @@ main {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    min-width: 20rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-.option-button {
-    
+.test-tools {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding-top: var(--toolbar-padding-top);
+    background-color: var(--editor-background-color);
 }
 
 .log {
-    background-color: goldenrod;
     overflow-y: scroll;
+    font-family: 'Courier New', Courier, monospace;
+    white-space: break-spaces;
+    color: white;
 }
 

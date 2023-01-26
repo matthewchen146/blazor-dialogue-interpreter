@@ -10,7 +10,7 @@
         <section class="editor-column left">
             <div class="script-tools">
                 <button>Export</button>
-                <button>Import</button>
+                <button @onclick="HandleImportClick">Import</button>
             </div>
             <div class="script-container">
                 <textarea class="script" spellcheck="false" value="@script"></textarea>
@@ -26,17 +26,19 @@
                     </div>
                     <div class="dialogue-box">dialogue box</div>
                     <div class="dialogue-footer">
-                        <button class="next-button">Next</button>
+                        <button class="next-button" @onclick="HandleNextClick">Next</button>
                     </div>
                 </div>
                 <div class="options-container">
 
                 </div>
+                <div class="test-tools">
+                    <button @onclick="HandleRunClick">Run</button>
+                    <select class="conversation-selector"></select>
+                </div>
             </div>
 
-            <pre class="log">
-                @log
-            </pre>
+            <pre class="log"></pre>
         </section>
     </section>
 </main>
@@ -46,134 +48,216 @@
     private DialogueInterpreter dialogueInterpreter = new();
 
     private string? script = "";
-    private string log = "";
 
     [JSInvokable]
-    public void Log(string? message)
+    public async void Log(string? message, int level = 0)
     {
-        Console.WriteLine($"logging [{message}]");
         if (message == null)
         {
             return;
         }
-        log += "\n" + message;
-        base.StateHasChanged();
+        string newLine = $"<span class='log-line level-{level}'>{message}</span>";
+        await JS.InvokeVoidAsync("addLogInnerHTML", newLine);
     }
 
-    private void HandleClick()
+    private async void HandleImportClick()
     {
-        @* int result = dialogueInterpreter.Load(script, out string error);
-
-        if (error.Length > 0)
-        {
-            Log($"ERROR - {error}");
-            return;
-        } *@
-
-        Log("nice!");
-        Console.WriteLine(script);
+        await JS.InvokeVoidAsync("callFunction", @"
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.addEventListener('change', () => {
+            let files = Array.from(input.files);
+            console.log(files);
+        })
+        input.click();
+        ");
     }
 
     [JSInvokable]
-    public async void CheckScriptChange(string newScript)
+    public async void UpdateScript(string newScript)
     {
-        if (newScript != script)
+        script = newScript;
+
+        int result = dialogueInterpreter.Load(script, out string error, out int errorLine, out DialogueInterpreter.DialogueData dialogueData);
+
+        if (result == 0)
         {
-            @* Console.WriteLine($"change detected \n{newScript}"); *@
-            script = newScript;
+            Log($"Dialogue Error - {error}", 2);
+        }
 
-            int result = dialogueInterpreter.Load(script, out string error, out int errorLine, out DialogueInterpreter.DialogueData dialogueData);
+        string scriptViewText = "";
 
-            if (result == 0)
+        string[] lines = script.Split('\n');
+
+        int commandIndex = 0;
+        for (int rawLineIndex = 0; rawLineIndex < lines.Length; rawLineIndex++)
+        {
+
+            string classes = "script-line";
+
+            string line = lines[rawLineIndex];
+
+            if (result == 0 && rawLineIndex == errorLine - 1)
             {
-                Log($"Dialogue Error - {error}");
-            }
-
-            string scriptViewText = "";
-
-            string[] lines = script.Split('\n');
-
-            int commandIndex = 0;
-            for (int rawLineIndex = 0; rawLineIndex < lines.Length; rawLineIndex++)
-            {
-                string classes = "script-line";
-
-                string line = lines[rawLineIndex];
-
-                if (result == 0 && rawLineIndex == errorLine - 1)
-                {
-                    classes += " error";
-                }
-                
-                if (commandIndex >= dialogueData.commands.Count || dialogueData.rawLineIndices[commandIndex] > rawLineIndex)
-                {
-                    classes += " comment";
-                }
-                else
-                {
-                    DialogueInterpreter.DialogueCommand command = dialogueData.commands[commandIndex];
-
-                    string[] words = line.Split(' ');
-                    int argIndex = -1;
-                    for (int wordIndex = 0; wordIndex < words.Length; wordIndex++)
-                    {
-                        string wordClasses = "";
-                        string word = words[wordIndex];
-                        if (word.Length == 0)
-                        {
-                            continue;
-                        }
-
-
-                        if (word[0] == '@')
-                        {
-                            wordClasses += $" token {command.token}";
-                        }
-                        else
-                        {
-                            argIndex += 1;
-                        }
-
-                        switch (command.token)
-                        {
-                            case "option":
-                            case "jump":
-                            case "label":
-                                if (argIndex == 0)
-                                {
-                                    wordClasses += " label";
-                                }
-                                break;
-                            default:
-                                break;
-                        }
-
-                        if (wordClasses.Length > 0)
-                        {
-                            words[wordIndex] = $"<span class='{wordClasses}'>{word}</span>";
-                        }
-                        
-                    }
-                    line = string.Join(' ', words);
-
-                    commandIndex += 1;
-                }
-
-                scriptViewText += $"<span class='{classes}' data-line='{rawLineIndex + 1}'>{line}</span>" + ((rawLineIndex == lines.Length - 1) ? "" : "\n");
+                classes += " error";
             }
             
+            if (commandIndex >= dialogueData.commands.Count || dialogueData.rawLineIndices[commandIndex] > rawLineIndex)
+            {
+                classes += " comment";
+            }
+            else
+            {
+                DialogueInterpreter.DialogueCommand command = dialogueData.commands[commandIndex];
 
-            await JS.InvokeVoidAsync("setScriptViewInnerHTML", scriptViewText);
+                string[] commentSplit = line.Split("//");
+                string comment = "";
+                if (commentSplit.Length > 0)
+                {
+                    if (commentSplit.Length > 1)
+                    {
+                        comment = commentSplit[1];
+                    }
+                    line = commentSplit[0];
+                }
 
+                string[] words = line.Split(' ');
+                int argIndex = -1;
+                for (int wordIndex = 0; wordIndex < words.Length; wordIndex++)
+                {
+                    string wordClasses = "";
+                    string word = words[wordIndex];
+                    if (word.Length == 0)
+                    {
+                        continue;
+                    }
+
+
+                    if (word[0] == '@')
+                    {
+                        wordClasses += $" token {command.token}";
+                    }
+                    else
+                    {
+                        argIndex += 1;
+                    }
+
+                    switch (command.token)
+                    {
+                        case "conversation":
+                            @* conversationNames.Add(command.args[0]); *@
+                            break;
+                        case "option":
+                        case "jump":
+                        case "label":
+                            if (argIndex == 0)
+                            {
+                                wordClasses += " label";
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+
+                    if (wordClasses.Length > 0)
+                    {
+                        words[wordIndex] = $"<span class='{wordClasses}'>{word}</span>";
+                    }
+                    
+                }
+                line = string.Join(' ', words);
+
+                if (commentSplit.Length > 1)
+                {
+                    line += $"<span class='comment'>//{comment}</span>";
+                }
+
+                commandIndex += 1;
+            }
+
+            scriptViewText += $"<span class='{classes}' data-line='{rawLineIndex + 1}'>{line}</span>" + ((rawLineIndex == lines.Length - 1) ? "" : "\n");
         }
+
+        string conversationSelectorInnerHTML = "";
+        foreach (string conversationName in dialogueData.conversations.Keys)
+        {
+            conversationSelectorInnerHTML += $"<option value='{conversationName}'>{conversationName}</option>";
+        }
+        await CallBySelector(".conversation-selector", $"element.innerHTML = `{conversationSelectorInnerHTML}`");
+
+        await JS.InvokeVoidAsync("setScriptViewInnerHTML", scriptViewText);
 
     }
     
+    private async void HandleRunClick()
+    {
+        Log("Starting dialogue...");
+
+        string conversationName = await CallBySelector<string>(".conversation-selector", "return element.value");
+        Log($"Conversation: {conversationName}");
+
+        dialogueInterpreter.StartConversation(conversationName);
+    }
+
+    private void HandleNextClick()
+    {
+        int result = dialogueInterpreter.Next();
+    }
+
+    [JSInvokable]
+    public void HandleOptionClick(int index)
+    {
+        int result = dialogueInterpreter.ChooseOption(index, out string error);
+        if (result == 0)
+        {
+            Log($"Option Click - {error}", 2);
+        }
+    }
+
+    private async ValueTask<T> CallBySelector<T>(string selector, string callback)
+    {
+        return await JS.InvokeAsync<T>("callBySelector", selector, callback);
+    }
+
+    private async ValueTask CallBySelector(string selector, string callback)
+    {
+        await JS.InvokeVoidAsync("callBySelector", selector, callback);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         string text = await Http.GetStringAsync("examples/Test.txt");
 
-        script = text;     
+        script = text;
+
+        dialogueInterpreter.events.On("textChanged", () => {
+            string text = (string)dialogueInterpreter.events.Args[0];
+            CallBySelector(".dialogue-box", "element.textContent = `" + text + "`;");
+        });
+
+        dialogueInterpreter.events.On("speakerChanged", () => {
+            string speaker = (string)dialogueInterpreter.events.Args[0];
+            CallBySelector(".speaker-label", "element.textContent = `" + speaker + "`;");
+        });
+
+        dialogueInterpreter.events.On("optionAdded", () => {
+            int index = (int)dialogueInterpreter.events.Args[0];
+            string text = (string)dialogueInterpreter.events.Args[1];
+            string labelName = (string)dialogueInterpreter.events.Args[2];
+            CallBySelector(".options-container", $@"
+            const button = document.createElement('button'); 
+            button.textContent = `{text}`;
+            button.classList.toggle('option-button', true);
+            button.addEventListener('click', () => {{
+                window.callDotNetReferenceMethod('index', 'HandleOptionClick', {index});
+            }})
+            element.appendChild(button);"
+            );
+        });
+
+        dialogueInterpreter.events.On("optionsCleared", () => {
+            CallBySelector(".options-container", "while (element.firstChild) {element.removeChild(element.lastChild);}");
+        });
 
         await JS.InvokeVoidAsync("setDotNetReference", "index", DotNetObjectReference.Create(this));
 
@@ -181,6 +265,26 @@
             "evalJavaScript", 
             @"
             (() => {
+
+                const callBySelectorMap = new Map();
+
+                window.callBySelector = (selector, callbackString) => {
+                    let element = callBySelectorMap.get(selector);
+                    if (!element) {
+                        element = document.querySelector(selector);
+                        if (element) {
+                            callBySelectorMap.set(selector, element);
+                        } else {
+                            console.log('couldnt find element by selector', selector);
+                            return;
+                        }
+                    }
+                    const callback = new Function('element', callbackString);
+                    if (typeof(callback) == 'function') {
+                        return callback(element);
+                    }
+                };
+
                 const textArea = document.querySelector('.script'); 
                 if (!textArea) {
                     console.error('could not find script editor');
@@ -194,9 +298,17 @@
                     }
                 }
 
+                const log = document.querySelector('.log');
+
+                window.addLogInnerHTML = (text) => {
+                    if (log) {
+                        log.innerHTML += (log.innerHTML.length === 0 ? '' : '\n') + text;
+                    }
+                }
+
                 const scriptContainer = document.querySelector('.script-container');
                 
-                function resizeView() {
+                function resizeView(setViewContent = true) {
                     const scrollTop = scriptContainer.scrollTop;
 
                     textArea.style.height = '';
@@ -209,26 +321,31 @@
                         scriptView.style.width = `${rect.width}px`;
                         scriptView.style.height = `${rect.height}px`;
 
-                        scriptView.textContent = textArea.value;
+                        if (setViewContent) {
+                            scriptView.textContent = textArea.value;
+                        }
                     }
 
                     scriptContainer.scrollTop = scrollTop;
                 }
 
-                function checkDiff() {
-                    console.debug('calling');
-                    window.callDotNetReferenceMethod('index', 'CheckScriptChange', textArea.value);
+                function updateScript() {
+                    console.debug('calling update script');
+                    window.callDotNetReferenceMethod('index', 'UpdateScript', textArea.value);
                 }
                 
-                let scriptCheckTimeout = setTimeout(checkDiff, 500);
+                let scriptCheckTimeout = setTimeout(updateScript, 500);
 
-                setTimeout(resizeView, 1);
+                setTimeout(() => {
+                    resizeView();
+                    updateScript();
+                }, 1);
 
-                window.addEventListener('resize', resizeView);
+                window.addEventListener('resize', resizeView.bind(this, false));
 
                 textArea.addEventListener('input', () => {
                     clearTimeout(scriptCheckTimeout);
-                    scriptCheckTimeout = setTimeout(checkDiff, 200);
+                    scriptCheckTimeout = setTimeout(updateScript, 200);
 
                     resizeView();
                 });
