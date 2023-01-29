@@ -21,51 +21,86 @@ class Parser
 
         public class Term
         {
-            private object? _value;
-            public Group? Value {
+            private Group? group;
+            private readonly string groupNameOrTerminal = "";
+            public Group? Group 
+            {
                 set
-                {
-                    _value = value;
-                } 
+                {} 
                 get
                 {
-                    if (_value is string)
+                    if (group == null)
                     {
-                        if (specification.ContainsKey((string)_value))
+                        if (specification.TryGetValue(groupNameOrTerminal, out Group? _group))
                         {
-                            return specification[(string)_value];
-                        }                        
+                            group = _group;
+                        }
                     }
-                    else if (_value is Group)
-                    {
-                        return (Group)_value;
-                    }
-                    return null;
+                    return group;
+                }
+            }
+            public string Value 
+            {
+                set
+                {}
+                get
+                {
+                    return groupNameOrTerminal;
+                }
+            }
+            public bool IsTerminal
+            {
+                set
+                {}
+                get
+                {
+                    return Group == null;
                 }
             }
             public bool repeatable = false;
             public bool optional = false;
-            public Term(string term, bool _repeatable = false, bool _optional = false)
+            public Term(string _groupNameOrTerminal, bool _repeatable = false, bool _optional = false)
             {
-                _value = term;
+                groupNameOrTerminal = _groupNameOrTerminal;
                 repeatable = _repeatable;
                 optional = _optional;
             }
 
-            public Term(Group group, bool _repeatable = false, bool _optional = false)
+            public Term(Group _group, bool _repeatable = false, bool _optional = false)
             {
-                _value = group;
+                group = _group;
                 repeatable = _repeatable;
                 optional = _optional;
             }
+
+            public Term()
+            {
+
+            }
         }
+
+        // public class Terminal : Term
+        // {
+        //     private readonly string value = "";
+        //     public string Value
+        //     {
+        //         set
+        //         {}
+        //         get
+        //         {
+        //             return value;
+        //         }
+        //     }
+        //     public Terminal(string _value)
+        //     {
+        //         value = _value;
+        //     }
+        // }
 
         // in BNF terms: an expression
         public class Group 
         {
-            public TokenValidator? validator = null;
             public List<Term> terms = new();
-            public bool isTerminal = false;
 
             public Group(params object[] _terms)
             {
@@ -83,6 +118,27 @@ class Parser
                         terms.Add(new((Group)term));
                     }
                 }
+            }
+
+            public override string ToString()
+            {
+                string s = this is OrderedGroup ? "ORD[" : "GRP[ ";
+                foreach (Term term in terms)
+                {
+                    if (term.Group != null)
+                    {
+                        if (term.Value.Length == 0)
+                        {
+                            s += $"{term.Group}, ";
+                        }
+                        
+                    }
+                    else
+                    {
+                        s += $"<{term.Value}>, ";
+                    }
+                }
+                return s + "]";
             }
         }
 
@@ -111,23 +167,23 @@ class Parser
         // if the parser can't find a symbol in the dictionary, it will assume that it should check for exact match (keyword)
         public static Dictionary<string, Group> specification = new() {
             {
-                /* <program> ::= {<line-wrapper>}* */
-                "program", new Group(new Term("line-wrapper", true, true))
+                /* <program> ::= {<line>}* */
+                "program", new Group(new Term("line", true, true))
             },
-            {
-                /* <line-wrapper> ::= 
-                    | '\n' <line> 
-                    | <line> 
-                */
-                "line-wrapper", new Group(new OrderedGroup("\n", "line"), new OrderedGroup("line"))
-            },
+            // {
+            //     /* <line-wrapper> ::= 
+            //         | '\n' <line> 
+            //         | <line> 
+            //     */
+            //     "line-wrapper", new Group(new OrderedGroup("\n", "line"), new OrderedGroup("line"))
+            // },
             {
                 /* <line> ::= 
                     | <comment> 
                     | <command-line> {<comment>} 
                     | <text-line> {<comment>}
                 */
-                "line", new Group(new OrderedGroup(new Group("command-line", "text-line"), new Term("comment", false, true)), "comment")
+                "line", new Group("comment", new OrderedGroup(new Group("command-line", "text-line"), new Term("comment", false, true)))
             },
             {
                 /* <command-line> ::= '@' <command> */
@@ -145,7 +201,27 @@ class Parser
             {
                 /* <conversation-command> ::= 'conversation' <id> */
                 "conversation-command", new OrderedGroup("conversation", "id")
-            }
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "enter-command", new OrderedGroup("enter", new Term("id", true))
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "speak-command", new OrderedGroup("speak", "id")
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "label-command", new OrderedGroup("label", "id")
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "jump-command", new OrderedGroup("jump", "id")
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "option-command", new OrderedGroup("option", "id", "string")
+            },
         };
 
         static TokenValidator CreateMatchExact(string toMatch)
@@ -258,6 +334,24 @@ class Parser
                 }
             },
             {
+                "conversation", CreateMatchExact("conversation")
+            },
+            {
+                "enter", CreateMatchExact("enter")
+            },
+            {
+                "speak", CreateMatchExact("speak")
+            },
+            {
+                "label", CreateMatchExact("label")
+            },
+            {
+                "jump", CreateMatchExact("jump")
+            },
+            {
+                "option", CreateMatchExact("option")
+            },
+            {
                 "id", (ref string text, int startIndex, out int endIndex) => {
                     
                     string target = "";
@@ -286,22 +380,23 @@ class Parser
                     endIndex = startIndex;
                     return target;
                 }
-            }
+            },
+            
             
             
         };
 
-        string text = "";
-        int index = 0;
-        bool justNewlined = true;
-        static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\n', true}, {'\t', true}};
+        public string text = "";
+        public int index = 0;
+        public static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\n', true}, {'\t', true}};
         public Tokenizer(string _text)
         {
             text = _text;
         }
 
-        public Token? GetNextToken()
+        public Token? GetNextToken(ref int index)
         {
+
             // skip white space
             while (!ReachedEnd() && whitespace.ContainsKey(text[index]))
             {
@@ -327,8 +422,6 @@ class Parser
 
                 index = endIndex;
 
-                Console.WriteLine($"index: {index}");
-
                 return new(key, value);
             }
             
@@ -337,125 +430,10 @@ class Parser
             return null;
         }
 
-        // public Token? GetNextToken(out Token? token)
-        // {
-            
-
-        //     // skip white space
-        //     while (!ReachedEnd() && whitespace.Contains(text[index]))
-        //     {
-        //         if (text[index] == '\n')
-        //         {
-        //             justNewlined = true;
-        //         }
-        //         index += 1;
-        //     }
-
-        //     token = null;
-        //     if (!HasMoreTokens())
-        //     {
-        //         return null;
-        //     }
-
-
-        //     // string target = "";
-          
-        //     foreach (string type in specification.Keys)
-        //     {
-        //         Group group = specification[type];
-        //         string? subtype = ResolveGroup(group);
-        //         if (subtype != null)
-        //         {
-
-        //             string? value = validator(ref text, ref index);
-        //             token = new(type, value);
-        //         }
-        //         if (group.children.Count > 0)
-        //         {
-        //             // for each type in the group, get group
-        //             foreach (string subtype in group.children)
-        //             {
-        //                 Group subgroup = specification[subtype];
-        //             }
-        //         }
-                
-        //         string? value = validator(ref text, ref index);
-        //         if (value != null)
-        //         {
-        //             token = new(type, value);
-        //             return token;
-        //         }
-
-        //     }
-
-        //     // // command
-        //     // if (text[index] == '@')
-        //     // {
-        //     //     // int endIndex = text.IndexOf(' ', index + 1);
-        //     //     index += 1;
-        //     //     while (!whitespace.Contains(text[index]) && !ReachedEnd())
-        //     //     {
-        //     //         target += text[index];
-        //     //         // Console.WriteLine($"current target {target}, char {text[index]}");
-        //     //         index += 1;
-        //     //     }
-        //     //     justNewlined = false;
-        //     //     token = new("command", target);
-        //     //     return token;
-        //     // }
-
-        //     // // comment
-        //     // if (text[index] == '/')
-        //     // {
-        //     //     if (text[index + 1] == '/')
-        //     //     {
-        //     //         while (text[index] != '\n')
-        //     //         {
-        //     //             target += text[index];
-        //     //             index += 1;
-        //     //         }
-        //     //         justNewlined = false;
-        //     //         token = new("comment", target);
-        //     //         return token;
-        //     //     }
-        //     // }
-            
-        //     // // text
-        //     // if (index == 0 || justNewlined)//text[index - 1] == '\n')
-        //     // {
-        //     //     while (text[index] != '\n')
-        //     //     {
-        //     //         target += text[index];
-        //     //         index += 1;
-        //     //     }
-
-        //     //     // also check if target does not only consist of white space?
-        //     //     if (target.Length > 0)
-        //     //     {
-        //     //         justNewlined = false;
-        //     //         token = new("text", target);
-        //     //         return token;
-        //     //     }
-                
-        //     // }
-
-        //     // skip white space?
-        //     string target = "" + text[index];
-        //     index += 1;
-
-        //     if (token == null) 
-        //     {
-        //         justNewlined = false;
-        //     }
-
-        //     token = new("unknown", target);
-        //     return token;
-        // }
-
-        // public Token? GetNextToken()
-        // {
-        //     return GetNextToken(out Token _);
-        // }
+        public Token? GetNextToken()
+        {
+            return GetNextToken(ref index);
+        }
 
         bool ReachedEnd()
         {
@@ -466,33 +444,142 @@ class Parser
         {
             return !ReachedEnd();
         }
-        
+
     }
 
     Tokenizer tokenizer = new("");
-    // Tokenizer.Token? predictedToken;
+    
     Tokenizer.Token? predictedToken = null;
 
-    // public Tokenizer.Token? Eat(string tokenType)
-    // {
-    //     if (predictedToken == null)
-    //     {
-    //         Console.WriteLine($"Unexpected end, expected a {tokenType}");
-    //         return null;
-    //     }
 
-    //     Tokenizer.Token token = predictedToken;
+    public Tokenizer.Token? Consume(Tokenizer.Group group, int callstack = 0)
+    {
 
-    //     if (token.type != tokenType)
-    //     {
-    //         Console.WriteLine($"Unexpected {predictedToken.type} ({predictedToken.value}), expected a {tokenType}");
-    //         return null;
-    //     }
+        Console.WriteLine($"{callstack} Consuming {group}");
 
-    //     predictedToken = tokenizer.GetNextToken();
+        if (group is Tokenizer.OrderedGroup)
+        {
+            // OrderedGroup
+            foreach (Tokenizer.Term term in group.terms)
+            {
+                Tokenizer.Token? consumedToken;
+                // for each term, check for match, otherwise return null
+                // must be matched in order, that is why it has to return null on fail
+                // matches can be deep, so make sure state is saved here somehow?
+                if (term.Group != null)
+                {
+                    consumedToken = Consume(term.Group, callstack + 1);
+                    if (term.repeatable)
+                    {
+                        while (consumedToken != null)
+                        {
+                            Console.WriteLine($"Consuming Repeatable {term.Group}");
+                            consumedToken = Consume(term.Group, callstack + 1);
+                        }
+                    }
+                }
+                else
+                {
+                    consumedToken = Consume(term.Value, callstack + 1);
+                    if (term.repeatable)
+                    {
+                        while (consumedToken != null)
+                        {
+                            Console.WriteLine($"Consuming Repeatable <{term.Value}>");
+                            consumedToken = Consume(term.Value, callstack + 1);
+                        }
+                    }
+                }
 
-    //     return token;
-    // }
+                if (term.optional)
+                {
+                    continue;
+                }
+
+                if (!term.repeatable && consumedToken == null)
+                {
+                    return null;
+                }
+            }
+
+            return predictedToken;
+        }
+        else
+        {
+            // OrGroup aka Group
+            Tokenizer.Token? consumedToken = null;
+
+            foreach (Tokenizer.Term term in group.terms)
+            {
+                // for each term, check for match, otherwise continue
+                // matches can be deep, so make sure state is saved here somehow?
+                if (term.Group != null)
+                {
+                    consumedToken = Consume(term.Group, callstack + 1);
+                    if (term.repeatable)
+                    {
+                        while (consumedToken != null)
+                        {
+                            Console.WriteLine($"Consuming Repeatable <{term.Group}>");
+                            consumedToken = Consume(term.Group, callstack + 1);
+                        }
+                    }
+                }
+                else
+                {
+                    consumedToken = Consume(term.Value, callstack + 1);
+                    if (term.repeatable)
+                    {
+                        while (consumedToken != null)
+                        {
+                            Console.WriteLine($"Consuming Repeatable <{term.Value}>");
+                            consumedToken = Consume(term.Value, callstack + 1);
+                        }
+                    }
+                }
+
+                if (consumedToken != null)
+                {
+                    break;
+                }
+            }
+
+            return consumedToken;
+        }
+    }
+
+    public Tokenizer.Token? Consume(string groupNameOrTerminal, int callstack = 0)
+    {
+
+        if (predictedToken == null)
+        {
+            Console.WriteLine("Error no predicted token");
+            return null;
+        }
+
+        Console.WriteLine($"{callstack} Consuming <{groupNameOrTerminal}> - predicted: <{predictedToken.type}>");
+
+        if (tokenizer.terminals.ContainsKey(groupNameOrTerminal))
+        {
+            // string? value = tokenizer.terminals[groupNameOrTerminal].Invoke(ref tokenizer.text, tokenizer.index, out int endIndex);
+            if (groupNameOrTerminal == predictedToken.type)
+            {
+                Console.WriteLine($"found token match [{predictedToken.type}] [{predictedToken.value}]");
+                Tokenizer.Token token = predictedToken;
+                predictedToken = tokenizer.GetNextToken();
+                return token;
+            }
+            // return tokenizer.GetNextToken(); // or something that means true??
+            return null;
+        }
+
+        if (Tokenizer.specification.TryGetValue(groupNameOrTerminal, out Tokenizer.Group? group))
+        {
+            return Consume(group, callstack + 1);
+        }
+
+        return null;
+    }
 
     public void Parse(string text)
     {
@@ -506,15 +593,26 @@ class Parser
             return;
         }
 
-        // Console.WriteLine($"first token: {predictedToken.type} - {predictedToken.value}");
+        // test for getting all tokens
+
+        // int iter = 0;
+        // while (predictedToken != null && iter < 100)
+        // {
+        //     Console.WriteLine($"token: TYPE: [{predictedToken.type}], VALUE: [{predictedToken.value}]");
+        //     predictedToken = tokenizer.GetNextToken();
+        //     iter++;
+        // }
 
         int iter = 0;
-        while (predictedToken != null && iter < 100)
-        {
-            Console.WriteLine($"token: TYPE: [{predictedToken.type}], VALUE: [{predictedToken.value}]");
-            predictedToken = tokenizer.GetNextToken();
-            iter++;
-        }
+        Tokenizer.Token? consumedToken = Consume("program");
+        // while (consumedToken != null && iter < 200)
+        // {
+        //     Console.WriteLine($"consumedToken: TYPE: [{consumedToken.type}], VALUE: [{consumedToken.value}]");
+        //     consumedToken = Consume("program");
+        //     iter++;
+        // }
+        
+
 
         // return program : command | text | comment
         // Tokenizer.Token? returnedToken = Eat(predictedToken.type);
