@@ -35,6 +35,7 @@
                 <div class="test-tools">
                     <button @onclick="HandleRunClick">Run</button>
                     <select class="conversation-selector"></select>
+                    <button @onclick="Parse">Parse</button>
                 </div>
             </div>
 
@@ -204,6 +205,12 @@
         int result = dialogueInterpreter.Next();
     }
 
+    private void Parse()
+    {
+        Parser parser = new();
+        parser.Parse(script);
+    }
+
     [JSInvokable]
     public void HandleOptionClick(int index)
     {
@@ -230,21 +237,21 @@
 
         script = text;
 
-        dialogueInterpreter.events.On("textChanged", () => {
+        dialogueInterpreter.events.On("textChanged", async () => {
             string text = (string)dialogueInterpreter.events.Args[0];
-            CallBySelector(".dialogue-box", "element.textContent = `" + text + "`;");
+            await CallBySelector(".dialogue-box", "element.textContent = `" + text + "`;");
         });
 
-        dialogueInterpreter.events.On("speakerChanged", () => {
+        dialogueInterpreter.events.On("speakerChanged", async () => {
             string speaker = (string)dialogueInterpreter.events.Args[0];
-            CallBySelector(".speaker-label", "element.textContent = `" + speaker + "`;");
+            await CallBySelector(".speaker-label", "element.textContent = `" + speaker + "`;");
         });
 
-        dialogueInterpreter.events.On("optionAdded", () => {
+        dialogueInterpreter.events.On("optionAdded", async () => {
             int index = (int)dialogueInterpreter.events.Args[0];
             string text = (string)dialogueInterpreter.events.Args[1];
             string labelName = (string)dialogueInterpreter.events.Args[2];
-            CallBySelector(".options-container", $@"
+            await CallBySelector(".options-container", $@"
             const button = document.createElement('button'); 
             button.textContent = `{text}`;
             button.classList.toggle('option-button', true);
@@ -255,8 +262,8 @@
             );
         });
 
-        dialogueInterpreter.events.On("optionsCleared", () => {
-            CallBySelector(".options-container", "while (element.firstChild) {element.removeChild(element.lastChild);}");
+        dialogueInterpreter.events.On("optionsCleared", async () => {
+            await CallBySelector(".options-container", "while (element.firstChild) {element.removeChild(element.lastChild);}");
         });
 
         await JS.InvokeVoidAsync("setDotNetReference", "index", DotNetObjectReference.Create(this));
