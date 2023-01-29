@@ -153,7 +153,7 @@ class Parser
             return (ref string text, int startIndex, out int endIndex) => {
                 endIndex = startIndex;
                 int matchIndex = 0;
-                while (!whitespace.ContainsKey(text[startIndex]) && startIndex < text.Length && startIndex < toMatch.Length)
+                while (startIndex < text.Length && matchIndex < toMatch.Length)
                 {
                     if (text[startIndex] != toMatch[matchIndex])
                     {
@@ -202,6 +202,62 @@ class Parser
                 }
             },
             {
+                "string", (ref string text, int startIndex, out int endIndex) => {
+                    
+                    endIndex = startIndex;
+                    string target = "";
+
+                    // check for " at the start
+                    if (text[startIndex] != '"')
+                    {
+                        return null;
+                    }
+
+                    startIndex += 1;
+
+                    while (text[startIndex] != '"' && startIndex < text.Length)
+                    {
+                        target += text[startIndex];
+                        startIndex += 1;
+                    }
+
+                    // no ending " found
+                    if (startIndex == text.Length)
+                    {
+                        return null;
+                    }
+
+                    // skip last " for end index
+                    endIndex = startIndex + 1;
+                    return target;
+                }
+            },
+            {
+                "text-line", (ref string text, int startIndex, out int endIndex) => {
+                    
+                    endIndex = startIndex;
+                    string target = "";
+
+                    // text lines can only start on the beginning of the program, or after a new line
+                    if (startIndex != 0)
+                    {
+                        if (text[startIndex - 1] != '\n')
+                        {
+                            return null;
+                        }
+                    }
+
+                    while (text[startIndex] != '\n' && startIndex < text.Length)
+                    {
+                        target += text[startIndex];
+                        startIndex += 1;
+                    }
+
+                    endIndex = startIndex;
+                    return target;
+                }
+            },
+            {
                 "id", (ref string text, int startIndex, out int endIndex) => {
                     
                     string target = "";
@@ -230,52 +286,8 @@ class Parser
                     endIndex = startIndex;
                     return target;
                 }
-            },
-            {
-                "string", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    endIndex = startIndex;
-                    string target = "";
-
-                    // check for " at the start
-                    if (text[startIndex] != '"')
-                    {
-                        return null;
-                    }
-
-                    while (text[startIndex] != '"' && startIndex < text.Length)
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    // no ending " found
-                    if (startIndex == text.Length)
-                    {
-                        return null;
-                    }
-
-                    // skip last " for end index
-                    endIndex = startIndex + 1;
-                    return target;
-                }
-            },
-            {
-                "text-line", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    endIndex = startIndex;
-                    string target = "";
-
-                    while (text[startIndex] != '\n' && startIndex < text.Length)
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    endIndex = startIndex;
-                    return target;
-                }
             }
+            
             
         };
 
@@ -314,6 +326,8 @@ class Parser
                 }
 
                 index = endIndex;
+
+                Console.WriteLine($"index: {index}");
 
                 return new(key, value);
             }
@@ -490,6 +504,16 @@ class Parser
         if (predictedToken == null)
         {
             return;
+        }
+
+        // Console.WriteLine($"first token: {predictedToken.type} - {predictedToken.value}");
+
+        int iter = 0;
+        while (predictedToken != null && iter < 100)
+        {
+            Console.WriteLine($"token: TYPE: [{predictedToken.type}], VALUE: [{predictedToken.value}]");
+            predictedToken = tokenizer.GetNextToken();
+            iter++;
         }
 
         // return program : command | text | comment
