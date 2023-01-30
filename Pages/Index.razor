@@ -79,7 +79,7 @@
     {
         script = newScript;
 
-        int result = dialogueInterpreter.Load(script, out string error, out int errorLine, out DialogueInterpreter.DialogueData dialogueData);
+        int result = dialogueInterpreter.Load(script, out DialogueInterpreter.ErrorInfo error, out DialogueInterpreter.DialogueData dialogueData);
 
         if (result == 0)
         {
@@ -87,97 +87,67 @@
         }
 
         string scriptViewText = "";
+        @* string scriptViewText = script; *@
 
-        string[] lines = script.Split('\n');
+        int lineIndex = 0;
+        int columnIndex = 0;
 
-        int commandIndex = 0;
-        for (int rawLineIndex = 0; rawLineIndex < lines.Length; rawLineIndex++)
+        Console.WriteLine("populating Fancy Script View");
+
+        List<string> scriptLines = new() {""};
+
+        for (int index = 0; index < dialogueData.tokens.Count; index++)
         {
+            Parser.Tokenizer.Token token = dialogueData.tokens[index];
 
-            string classes = "script-line";
-
-            string line = lines[rawLineIndex];
-
-            if (result == 0 && rawLineIndex == errorLine - 1)
+            string whitespace = "";
+            while (token.lineIndex > lineIndex)
             {
-                classes += " error";
+                scriptLines.Add("");
+                columnIndex = 0;
+                lineIndex += 1;
             }
-            
-            if (commandIndex >= dialogueData.commands.Count || dialogueData.rawLineIndices[commandIndex] > rawLineIndex)
+            while (token.columnIndex > columnIndex)
             {
-                classes += " comment";
-            }
-            else
-            {
-                DialogueInterpreter.DialogueCommand command = dialogueData.commands[commandIndex];
-
-                string[] commentSplit = line.Split("//");
-                string comment = "";
-                if (commentSplit.Length > 0)
-                {
-                    if (commentSplit.Length > 1)
-                    {
-                        comment = commentSplit[1];
-                    }
-                    line = commentSplit[0];
-                }
-
-                string[] words = line.Split(' ');
-                int argIndex = -1;
-                for (int wordIndex = 0; wordIndex < words.Length; wordIndex++)
-                {
-                    string wordClasses = "";
-                    string word = words[wordIndex];
-                    if (word.Length == 0)
-                    {
-                        continue;
-                    }
-
-
-                    if (word[0] == '@')
-                    {
-                        wordClasses += $" token {command.token}";
-                    }
-                    else
-                    {
-                        argIndex += 1;
-                    }
-
-                    switch (command.token)
-                    {
-                        case "conversation":
-                            @* conversationNames.Add(command.args[0]); *@
-                            break;
-                        case "option":
-                        case "jump":
-                        case "label":
-                            if (argIndex == 0)
-                            {
-                                wordClasses += " label";
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-
-                    if (wordClasses.Length > 0)
-                    {
-                        words[wordIndex] = $"<span class='{wordClasses}'>{word}</span>";
-                    }
-                    
-                }
-                line = string.Join(' ', words);
-
-                if (commentSplit.Length > 1)
-                {
-                    line += $"<span class='comment'>//{comment}</span>";
-                }
-
-                commandIndex += 1;
+                whitespace += ' ';
+                columnIndex += 1;
             }
 
-            scriptViewText += $"<span class='{classes}' data-line='{rawLineIndex + 1}'>{line}</span>" + ((rawLineIndex == lines.Length - 1) ? "" : "\n");
+            @* Console.WriteLine($"add token {token.value}");
+            Console.WriteLine($"curCol: {columnIndex}, tokenCol: {token.columnIndex}"); *@
+
+            columnIndex += ((string)token.value).Length;
+
+            // set up span
+            List<string> classes = new() {token.type};
+
+            if (index > 0 && dialogueData.tokens[index - 1].type == "command-prefix")
+            {
+                classes.Add("command");
+            }
+
+            scriptLines[scriptLines.Count - 1] += $"<span class='{string.Join(' ', classes)}'>{whitespace + token.value}</span>";
+
         }
+
+        for (int index = 0; index < scriptLines.Count; index++)
+        {
+            string newline = index > 0 ? "\n" : "";
+            string line = scriptLines[index];
+
+            List<string> classes = new();
+
+            if (result == 0 && error.lineIndex == index)
+            {
+                classes.Add("error");
+            }
+
+            scriptViewText += $"{newline}<span class='script-line {string.Join(' ', classes)}' data-line='{index + 1}'>{line}</span>";
+        }
+
+        Parser.Tokenizer.Token lastToken = dialogueData.tokens[dialogueData.tokens.Count - 1];
+        Console.WriteLine($"DIFFERENCE IN LENGTH: {lastToken.index + lastToken.value.Length}, {script.Length}");
+
 
         string conversationSelectorInnerHTML = "";
         foreach (string conversationName in dialogueData.conversations.Keys)
@@ -194,15 +164,23 @@
     {
         Log("Starting dialogue...");
 
-        string conversationName = await CallBySelector<string>(".conversation-selector", "return element.value");
-        Log($"Conversation: {conversationName}");
+        string? conversationName = await CallBySelector<string>(".conversation-selector", "return element.value");
+        if (conversationName != null)
+        {
+            Log($"Starting conversation: {conversationName}");
 
-        dialogueInterpreter.StartConversation(conversationName);
+            int result = dialogueInterpreter.StartConversation(conversationName, out string error);
+            if (result == 0)
+            {
+                Log($"Failed to start conversation - {error}");
+            }
+        }
     }
 
     private void HandleNextClick()
     {
         int result = dialogueInterpreter.Next();
+        Log($"next clicked! result: {result}");
     }
 
     private void Parse()
@@ -239,11 +217,13 @@
 
         dialogueInterpreter.events.On("textChanged", async () => {
             string text = (string)dialogueInterpreter.events.Args[0];
+            Log("text changed " + text);
             await CallBySelector(".dialogue-box", "element.textContent = `" + text + "`;");
         });
 
         dialogueInterpreter.events.On("speakerChanged", async () => {
             string speaker = (string)dialogueInterpreter.events.Args[0];
+            Log("speaker changed " + speaker);
             await CallBySelector(".speaker-label", "element.textContent = `" + speaker + "`;");
         });
 

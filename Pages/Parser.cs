@@ -1,6 +1,6 @@
 
 #nullable enable
-class Parser 
+public class Parser 
 {
 
     public class Tokenizer 
@@ -9,11 +9,34 @@ class Parser
         public class Token 
         {
             public string type = "";
-            public object? value = null;
-            public Token(string _type, object _value)
+            public string value = "";
+            public int index = 0;
+            public int lineIndex = 0;
+            public int columnIndex = 0;
+            public int LineNumber {
+                set
+                {}
+                get
+                {
+                    return lineIndex + 1;
+                }
+            }
+            public int ColumnNumber
+            {
+                set
+                {}
+                get
+                {
+                    return columnIndex + 1;
+                }
+            }
+            public Token(string _type, string _value, int _index, int _lineIndex, int _columnIndex)
             {
                 type = _type;
                 value = _value;
+                index = _index;
+                lineIndex = _lineIndex;
+                columnIndex = _columnIndex;
             }
         }
 
@@ -79,24 +102,6 @@ class Parser
             }
         }
 
-        // public class Terminal : Term
-        // {
-        //     private readonly string value = "";
-        //     public string Value
-        //     {
-        //         set
-        //         {}
-        //         get
-        //         {
-        //             return value;
-        //         }
-        //     }
-        //     public Terminal(string _value)
-        //     {
-        //         value = _value;
-        //     }
-        // }
-
         // in BNF terms: an expression
         public class Group 
         {
@@ -142,19 +147,6 @@ class Parser
             }
         }
 
-        public class EmptyGroup : Group
-        {
-
-        }
-
-        // public class AnyGroup : Group
-        // {
-        //     public AnyGroup(IEnumerable<string> _children) : base(_children)
-        //     {
-
-        //     }
-        // }
-
         public class OrderedGroup : Group
         {
             public OrderedGroup(params object[] _terms) : base(_terms)
@@ -171,23 +163,20 @@ class Parser
                 "program", new Group(new Term("line", true, true))
             },
             // {
-            //     /* <line-wrapper> ::= 
-            //         | '\n' <line> 
-            //         | <line> 
-            //     */
-            //     "line-wrapper", new Group(new OrderedGroup("\n", "line"), new OrderedGroup("line"))
+            //     /* <line-wrapper> ::= <newline> <line> | <line> */
+            //     "line-wrapper", new Group(new OrderedGroup("newline", "line"), "line", "newline")
             // },
             {
                 /* <line> ::= 
                     | <comment> 
                     | <command-line> {<comment>} 
-                    | <text-line> {<comment>}
+                    | <text> {<comment>}
                 */
-                "line", new Group("comment", new OrderedGroup(new Group("command-line", "text-line"), new Term("comment", false, true)))
+                "line", new Group("comment", new OrderedGroup(new Group("command-line", "text"), new Term("comment", false, true)))
             },
             {
                 /* <command-line> ::= '@' <command> */
-                "command-line", new OrderedGroup("@", "command")
+                "command-line", new OrderedGroup("command-prefix", "command")
             },
             {
                 /* <command> ::= 
@@ -243,13 +232,84 @@ class Parser
             };
         }
 
+        class TrieNode
+        {
+            readonly Dictionary<char, TrieNode> children = new();
+
+            public void Add(string word)
+            {
+                int index = 0;
+                TrieNode curr = this;
+                while (index < word.Length)
+                {
+                    if (!curr.children.ContainsKey(word[index]))
+                    {
+                        TrieNode child = new();
+                        curr.children.Add(word[index], child);
+                    }
+                    curr = curr.children[word[index]];
+
+                    index += 1;
+                }
+            }
+
+            public bool Find(string word)
+            {
+                int index = 0;
+                TrieNode curr = this;
+                while (index < word.Length)
+                {
+                    if (curr.children.TryGetValue(word[index], out TrieNode? child))
+                    {
+                        if (index == word.Length - 1)
+                        {
+                            return true;
+                        }
+
+                        curr = child;
+                        index += 1;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                return false;
+            }
+        }
+
+        // static TokenValidator CreateMatchExactAny(IEnumerable<string> toMatchAny)
+        // {
+        //     TrieNode root = new();
+        //     foreach (string s in toMatchAny)
+        //     {
+        //         root.Add(s);
+        //     }
+
+        //     return (ref string text, int startIndex, out int endIndex) => {
+        //         endIndex = startIndex;
+        //         int matchIndex = 0;
+        //         while (startIndex < text.Length && matchIndex < toMatch.Length)
+        //         {
+        //             if (text[startIndex] != toMatch[matchIndex])
+        //             {
+        //                 return null;
+        //             }
+        //             matchIndex += 1;
+        //             startIndex += 1;
+        //         }
+        //         endIndex = startIndex;
+        //         return toMatch;
+        //     };
+        // }
+
         public Dictionary<string, TokenValidator> terminals = new()
         {
             {
-                "\n", CreateMatchExact("\n")
+                "newline", CreateMatchExact("\n")
             },
             {
-                "@", CreateMatchExact("@")
+                "command-prefix", CreateMatchExact("@")
             },
             {
                 "comment", (ref string text, int startIndex, out int endIndex) => {
@@ -289,19 +349,23 @@ class Parser
                         return null;
                     }
 
+                    target += '"';
+
                     startIndex += 1;
 
-                    while (text[startIndex] != '"' && startIndex < text.Length)
+                    while (text[startIndex] != '"' && text[startIndex] != '\n' && startIndex < text.Length)
                     {
                         target += text[startIndex];
                         startIndex += 1;
                     }
 
                     // no ending " found
-                    if (startIndex == text.Length)
+                    if (startIndex == text.Length || text[startIndex] == '\n')
                     {
                         return null;
                     }
+
+                    target += '"';
 
                     // skip last " for end index
                     endIndex = startIndex + 1;
@@ -309,7 +373,7 @@ class Parser
                 }
             },
             {
-                "text-line", (ref string text, int startIndex, out int endIndex) => {
+                "text", (ref string text, int startIndex, out int endIndex) => {
                     
                     endIndex = startIndex;
                     string target = "";
@@ -323,7 +387,7 @@ class Parser
                         }
                     }
 
-                    while (text[startIndex] != '\n' && startIndex < text.Length)
+                    while (text[startIndex] != '\n' && startIndex < text.Length && !(text[startIndex] == '/' && text[startIndex + 1] == '/')) //predict error here
                     {
                         target += text[startIndex];
                         startIndex += 1;
@@ -334,29 +398,29 @@ class Parser
                 }
             },
             {
-                "conversation", CreateMatchExact("conversation")
+                "conversation", CreateMatchExact("conversation ")
             },
             {
-                "enter", CreateMatchExact("enter")
+                "enter", CreateMatchExact("enter ")
             },
             {
-                "speak", CreateMatchExact("speak")
+                "speak", CreateMatchExact("speak ")
             },
             {
-                "label", CreateMatchExact("label")
+                "label", CreateMatchExact("label ")
             },
             {
-                "jump", CreateMatchExact("jump")
+                "jump", CreateMatchExact("jump ")
             },
             {
-                "option", CreateMatchExact("option")
+                "option", CreateMatchExact("option ")
             },
             {
                 "id", (ref string text, int startIndex, out int endIndex) => {
                     
                     string target = "";
 
-                    while (!whitespace.ContainsKey(text[startIndex]) && startIndex < text.Length)
+                    while (!whitespace.ContainsKey(text[startIndex]) && startIndex < text.Length && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
                     {
                         target += text[startIndex];
                         startIndex += 1;
@@ -371,7 +435,7 @@ class Parser
                     
                     string target = "";
 
-                    while (!whitespace.ContainsKey(text[startIndex]) && startIndex < text.Length)
+                    while (!whitespace.ContainsKey(text[startIndex]) && startIndex < text.Length && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
                     {
                         target += text[startIndex];
                         startIndex += 1;
@@ -388,20 +452,48 @@ class Parser
 
         public string text = "";
         public int index = 0;
-        public static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\n', true}, {'\t', true}};
+        private int newlineCount = 0;
+        private int lineColumnCount = 0;
+        public static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\t', true}, {'\n', true}};
         public Tokenizer(string _text)
         {
             text = _text;
         }
 
-        public Token? GetNextToken(ref int index)
+        void AdvanceIndex()
         {
+            // check if passed newline
+            if (text[index] == '\n')
+            {
+                newlineCount += 1;
+                lineColumnCount = 0;
+            }
+            else
+            {
+                lineColumnCount += 1;
+            }
 
+            index += 1;
+        }
+
+        public Token? GetNextToken()//out Token? whitespaceToken)
+        {
+            // whitespaceToken = null;
+            // string whitespaceValue = "";
+            // int whitespaceStartIndex = index;
+            // int whitespaceLineIndex = newlineCount;
+            // int whitespaceColumnIndex = lineColumnCount;
             // skip white space
             while (!ReachedEnd() && whitespace.ContainsKey(text[index]))
             {
-                index += 1;
+                // whitespaceValue += text[index];
+                AdvanceIndex();
             }
+
+            // if (whitespaceValue.Length > 0)
+            // {
+            //     whitespaceToken = new("whitespace", whitespaceValue, whitespaceStartIndex, whitespaceLineIndex, whitespaceColumnIndex);
+            // }
 
             if (!HasMoreTokens())
             {
@@ -420,19 +512,22 @@ class Parser
                     continue;
                 }
 
-                index = endIndex;
+                int startIndex = index;
+                int startColumnCount = lineColumnCount;
 
-                return new(key, value);
+                // index = endIndex;
+                while (index < endIndex)
+                {
+                    AdvanceIndex();  
+                }
+                
+
+                return new(key, value, startIndex, newlineCount, startColumnCount);
             }
             
             // if no matching terminal, just be null
-            Console.WriteLine("GetNextToken - no token found :[");
+            // Console.WriteLine("GetNextToken - no token found :[");
             return null;
-        }
-
-        public Token? GetNextToken()
-        {
-            return GetNextToken(ref index);
         }
 
         bool ReachedEnd()
@@ -451,11 +546,12 @@ class Parser
     
     Tokenizer.Token? predictedToken = null;
 
+    List<Tokenizer.Token> parsedTokens = new();
 
     public Tokenizer.Token? Consume(Tokenizer.Group group, int callstack = 0)
     {
 
-        Console.WriteLine($"{callstack} Consuming {group}");
+        // Console.WriteLine($"{callstack} Consuming {group}");
 
         if (group is Tokenizer.OrderedGroup)
         {
@@ -473,7 +569,7 @@ class Parser
                     {
                         while (consumedToken != null)
                         {
-                            Console.WriteLine($"Consuming Repeatable {term.Group}");
+                            // Console.WriteLine($"Consuming Repeatable {term.Group}");
                             consumedToken = Consume(term.Group, callstack + 1);
                         }
                     }
@@ -485,7 +581,7 @@ class Parser
                     {
                         while (consumedToken != null)
                         {
-                            Console.WriteLine($"Consuming Repeatable <{term.Value}>");
+                            // Console.WriteLine($"Consuming Repeatable <{term.Value}>");
                             consumedToken = Consume(term.Value, callstack + 1);
                         }
                     }
@@ -520,7 +616,7 @@ class Parser
                     {
                         while (consumedToken != null)
                         {
-                            Console.WriteLine($"Consuming Repeatable <{term.Group}>");
+                            // Console.WriteLine($"Consuming Repeatable <{term.Group}>");
                             consumedToken = Consume(term.Group, callstack + 1);
                         }
                     }
@@ -532,7 +628,7 @@ class Parser
                     {
                         while (consumedToken != null)
                         {
-                            Console.WriteLine($"Consuming Repeatable <{term.Value}>");
+                            // Console.WriteLine($"Consuming Repeatable <{term.Value}>");
                             consumedToken = Consume(term.Value, callstack + 1);
                         }
                     }
@@ -557,16 +653,25 @@ class Parser
             return null;
         }
 
-        Console.WriteLine($"{callstack} Consuming <{groupNameOrTerminal}> - predicted: <{predictedToken.type}>");
+        // Console.WriteLine($"{callstack} Consuming <{groupNameOrTerminal}> - predicted: <{predictedToken.type}>");
 
         if (tokenizer.terminals.ContainsKey(groupNameOrTerminal))
         {
             // string? value = tokenizer.terminals[groupNameOrTerminal].Invoke(ref tokenizer.text, tokenizer.index, out int endIndex);
             if (groupNameOrTerminal == predictedToken.type)
             {
-                Console.WriteLine($"found token match [{predictedToken.type}] [{predictedToken.value}]");
+                // Console.WriteLine($"found token match [{predictedToken.type}] [{predictedToken.value}]");
                 Tokenizer.Token token = predictedToken;
-                predictedToken = tokenizer.GetNextToken();
+
+                predictedToken = tokenizer.GetNextToken();//out Tokenizer.Token? whitespaceToken);
+
+                // if (whitespaceToken != null)
+                // {
+                //     parsedTokens.Add(whitespaceToken);
+                // }
+
+                parsedTokens.Add(token);
+
                 return token;
             }
             // return tokenizer.GetNextToken(); // or something that means true??
@@ -581,16 +686,23 @@ class Parser
         return null;
     }
 
-    public void Parse(string text)
+    public List<Tokenizer.Token> Parse(string text, string type = "program")
     {
         Console.WriteLine("parsing");
         tokenizer = new(text);
 
-        predictedToken = tokenizer.GetNextToken();
+        parsedTokens = new();
+
+        predictedToken = tokenizer.GetNextToken();//out Tokenizer.Token? whitespaceToken);
+
+        // if (whitespaceToken != null)
+        // {
+        //     parsedTokens.Add(whitespaceToken);
+        // }
 
         if (predictedToken == null)
         {
-            return;
+            return parsedTokens;
         }
 
         // test for getting all tokens
@@ -603,8 +715,17 @@ class Parser
         //     iter++;
         // }
 
-        int iter = 0;
-        Tokenizer.Token? consumedToken = Consume("program");
+        // int iter = 0;
+        Tokenizer.Token? consumedToken = Consume(type);
+        if (consumedToken != null)
+        {
+            Console.WriteLine($"Successfully consumed [{type}]");
+        }
+
+        return parsedTokens;
+
+
+
         // while (consumedToken != null && iter < 200)
         // {
         //     Console.WriteLine($"consumedToken: TYPE: [{consumedToken.type}], VALUE: [{consumedToken.value}]");

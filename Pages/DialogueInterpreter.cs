@@ -5,14 +5,107 @@ using System.Collections.Generic;
 #nullable enable
 public class DialogueInterpreter
 {
-    public class DialogueCommand 
+    public class ErrorInfo
     {
-        public List<string> args = new();
-        public string token = "";
+        public string type = "";
+        public string message = "Error";
+        public int lineIndex = 0;
+        public int LineNumber
+        {
+            set
+            {}
+            get
+            {
+                return lineIndex + 1;
+            }
+        }
+        public int columnIndex = 0;
+        public int ColumnNumber
+        {
+            set
+            {}
+            get
+            {
+                return columnIndex + 1;
+            }
+        }
+        public Parser.Tokenizer.Token? token = null;
+        public ErrorInfo(int _lineIndex, int _columnIndex, string _message)
+        {
+            lineIndex = _lineIndex;
+            columnIndex = _columnIndex;
+            message = _message;
+        }
+
+        public ErrorInfo(int _lineIndex, string _message)
+        {
+            lineIndex = _lineIndex;
+            columnIndex = 0;
+            message = _message;
+        }
+
+        public ErrorInfo(Parser.Tokenizer.Token _token, string _message)
+        {
+            lineIndex = _token.lineIndex;
+            columnIndex = _token.columnIndex;
+            token = _token;
+            message = _message;
+        }
+
+        public ErrorInfo(string _message)
+        {
+            message = _message;
+        }
+
+        public ErrorInfo(string _type, int _lineIndex, int _columnIndex, string _message)
+        {
+            type = _type;
+            lineIndex = _lineIndex;
+            columnIndex = _columnIndex;
+            message = _message;
+        }
+
+        public ErrorInfo(string _type, int _lineIndex, string _message)
+        {
+            type = _type;
+            lineIndex = _lineIndex;
+            columnIndex = 0;
+            message = _message;
+        }
+
+        public ErrorInfo(string _type, Parser.Tokenizer.Token _token, string _message)
+        {
+            type = _type;
+            lineIndex = _token.lineIndex;
+            columnIndex = _token.columnIndex;
+            token = _token;
+            message = _message;
+        }
+
+        public ErrorInfo(string _type, string _message)
+        {
+            type = _type;
+            message = _message;
+        }
+
+        public ErrorInfo()
+        {
+
+        }
+
+        public override string ToString()
+        {
+            return (type.Length > 0 ? $"{type} Error " : "") + $"(Ln {LineNumber} Col {ColumnNumber}) - " + message;
+        }
+    }
+    public class Command 
+    {
+        public List<Parser.Tokenizer.Token> args = new();
+        public Parser.Tokenizer.Token token;
+        public Conversation? conversation;
         public int index = 0;
-        public Conversation conversation;
-        public int rawLineIndex = 0;
-        public DialogueCommand(int _index, Conversation _conversation, string _token, IEnumerable<string> _args)
+        // public Conversation conversation;
+        public Command(int _index, Parser.Tokenizer.Token _token, Conversation? _conversation, IEnumerable<Parser.Tokenizer.Token> _args)
         {
             index = _index;
             token = _token;
@@ -36,29 +129,33 @@ public class DialogueInterpreter
         public Dictionary<string, Character> characters = new();
         public Dictionary<string, int> labels = new();
         public int index = 0;
-        public List<DialogueCommand> commands = new();
+        // public List<Command> commands = new();
         public Conversation(int _index)
         {
             index = _index;
         }
+        public Conversation()
+        {
+
+        }
     }
     public class DialogueData
     {
-        public List<DialogueCommand> commands = new();
+        public List<Command> commands = new();
         public DialogueInterpreter dialogueInterpreter;
         public Dictionary<string, Conversation> conversations = new();
-        public Conversation? conversation;
-        public List<int> rawLineIndices;
-        public DialogueData(DialogueInterpreter _dialogueInterpreter, List<int> _rawLineIndices)
+        public Conversation? conversation = null;
+        public List<Parser.Tokenizer.Token> tokens = new();
+
+        public DialogueData(DialogueInterpreter _dialogueInterpreter)
         {
             dialogueInterpreter = _dialogueInterpreter;
-            rawLineIndices = _rawLineIndices;
         }
     }
-    delegate int CommandPreprocessor(DialogueData dialogueData, DialogueCommand command, out string error);
-    delegate int CommandValidator(DialogueData dialogueData, DialogueCommand command, out string error);
+    delegate int CommandPreprocessor(DialogueData dialogueData, Command command, out string error);
+    delegate int CommandValidator(DialogueData dialogueData, Command command, out string error);
 
-    delegate int CommandResolver(DialogueData dialogueData, DialogueCommand command, out string error);
+    delegate int CommandResolver(DialogueData dialogueData, Command command, out string error);
 
     class CommandContainer {
         public CommandPreprocessor? commandPreprocessor;
@@ -77,13 +174,18 @@ public class DialogueInterpreter
             
         }
 
-        public int Preprocess(DialogueData dialogueData, DialogueCommand command, out string error)
+        public int Preprocess(DialogueData dialogueData, Command command, out string error)
         {
             error = "";
+            // if (command.args.Count < minimumArgCount)
+            // {
+            //     error = $"{minimumArgCount} arguments are required";
+            //     return 0;
+            // }
             return commandPreprocessor != null ? commandPreprocessor.Invoke(dialogueData, command, out error) : 1;
         }
 
-        public int Validate(DialogueData dialogueData, DialogueCommand command, out string error)
+        public int Validate(DialogueData dialogueData, Command command, out string error)
         {
             error = "";
             if (command.args.Count < minimumArgCount)
@@ -94,7 +196,7 @@ public class DialogueInterpreter
             return commandValidator != null ? commandValidator.Invoke(dialogueData, command, out error) : 1;
         }
 
-        public int Resolve(DialogueData dialogueData, DialogueCommand command, out string error)
+        public int Resolve(DialogueData dialogueData, Command command, out string error)
         {   
             error = "";
             return commandResolver != null ? commandResolver.Invoke(dialogueData, command, out error) : 1;
@@ -103,22 +205,23 @@ public class DialogueInterpreter
 
     private static readonly Dictionary<string, CommandContainer> possibleCommands = new() {
         {"conversation", new CommandContainer(
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
                 if (command.args.Count == 0)
                 {
                     error = $"Conversation must have a name argument. Example: @conversation Greeting";
                     return 0;
                 }
-                string conversationName = command.args[0];
+                string conversationName = command.args[0].value;
                 if (dialogueData.conversations.ContainsKey(conversationName))
                 {
-                    error = $"Conversation \"{conversationName}\" was already defined on line {dialogueData.rawLineIndices[dialogueData.conversations[conversationName].index] + 1}";
+                    error = $"Conversation [{conversationName}] was already defined";
                     return 0;
                 }
                 Conversation conversation = new(command.index);
                 dialogueData.conversations.Add(conversationName, conversation);
                 dialogueData.conversation = conversation;
+                command.conversation = conversation;
                 return 1;
             },
             null,
@@ -126,7 +229,7 @@ public class DialogueInterpreter
             1
         )},
         {"label", new CommandContainer(
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
                 if (command.args.Count == 0)
                 {
@@ -134,10 +237,16 @@ public class DialogueInterpreter
                     return 0;
                 }
 
-                string labelName = command.args[0];
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string labelName = command.args[0].value;
                 if (command.conversation.labels.ContainsKey(labelName))
                 {
-                    error = $"Label \"{labelName}\" was already defined at {dialogueData.rawLineIndices[command.conversation.labels[labelName]] + 1} (no duplicate labels allowed)";
+                    // error = $"Label \"{labelName}\" was already defined at {dialogueData.rawLineIndices[command.conversation.labels[labelName]] + 1} (no duplicate labels allowed)";
                     return 0;
                 }
                 command.conversation.labels.Add(labelName, command.index);
@@ -148,7 +257,7 @@ public class DialogueInterpreter
             1
         )},
         {"enter", new CommandContainer(
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
                 if (command.args.Count == 0)
                 {
@@ -156,14 +265,21 @@ public class DialogueInterpreter
                     return 0;
                 }
                 Dictionary<string, int> characters = new();
-                foreach (string name in command.args)
+                foreach (Parser.Tokenizer.Token token in command.args)
                 {
+                    string name = token.value;
                     if (characters.ContainsKey(name))
                     {
-                        error = $"@enter can't enter the same name multiple times";
+                        error = $"Can't enter the same ID multiple times";
                         return 0;
                     }
                     characters.Add(name, 1);
+                }
+
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
                 }
                 // add characters to the conversation
                 foreach (string name in characters.Keys)
@@ -180,27 +296,27 @@ public class DialogueInterpreter
             1
         )},
         {"speak", new CommandContainer(
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                if (command.args.Count == 0)
-                {
-                    error = $"@speak requires atleast 1 name to speak";
-                    return 0;
-                }
-                foreach (string name in command.args)
-                {
-                    if (!command.conversation.characters.ContainsKey(name))
-                    {
-                        error = $"Character \"{name}\" at @speak was never entered or is entered or defined. Use @enter [name]";
-                        return 0;
-                    }
-                }
+                // if (command.args.Count == 0)
+                // {
+                //     error = $"@speak requires atleast 1 name to speak";
+                //     return 0;
+                // }
+                // foreach (string name in command.args)
+                // {
+                //     if (!command.conversation.characters.ContainsKey(name))
+                //     {
+                //         error = $"Character \"{name}\" at @speak was never entered or is entered or defined. Use @enter [name]";
+                //         return 0;
+                //     }
+                // }
                 return 1;
             },
             null, 
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                dialogueData.dialogueInterpreter.events.Trigger("speakerChanged", command.args[0]);
+                dialogueData.dialogueInterpreter.events.Trigger("speakerChanged", command.args[0].value);
                 return 1;
             },
             1
@@ -208,9 +324,9 @@ public class DialogueInterpreter
         {"text", new CommandContainer(
             null,
             null,
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                dialogueData.dialogueInterpreter.events.Trigger("textChanged", command.args[0]);
+                dialogueData.dialogueInterpreter.events.Trigger("textChanged", command.args[0].value);
                 dialogueData.dialogueInterpreter.nextReady = false;
                 return 1;
             },
@@ -218,9 +334,16 @@ public class DialogueInterpreter
         )},
         {"option", new CommandContainer(
             null,
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                string labelName = command.args[0];
+                string labelName = command.args[0].value;
+
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
                 if (labelName != "_" && !command.conversation.labels.ContainsKey(labelName))
                 {
                     error = $"Option label \"{labelName}\" does not exist in this conversation";
@@ -228,38 +351,43 @@ public class DialogueInterpreter
                 }
                 return 1;
             }, 
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                if (command.args.Count > 1)
-                {
-                    List<string> words = new();
-                    for (int i = 1; i < command.args.Count; i++)
-                    {
-                        words.Add(command.args[i]);
-                    }
-                    string text = string.Join(" ", words);
-                    string labelName = command.args[0];
-                    int index = dialogueData.dialogueInterpreter.currentOptions.Count;
-                    dialogueData.dialogueInterpreter.currentOptions.Add(labelName);
-                    dialogueData.dialogueInterpreter.events.Trigger("optionAdded", index, text, labelName);
-                }
+
+                int index = dialogueData.dialogueInterpreter.currentOptions.Count;
+                string text = command.args[1].value;
+                string labelName = command.args[0].value;
+
+                dialogueData.dialogueInterpreter.currentOptions.Add(labelName);
+
+                dialogueData.dialogueInterpreter.events.Trigger("optionAdded", index, text, labelName);
+                
+                // Console.WriteLine("checking for last option");
                 if (command.index < dialogueData.commands.Count - 1)
                 {
-                    DialogueCommand nextCommand = dialogueData.commands[command.index + 1];
-                    if (nextCommand.token != "option")
+                    // Console.WriteLine("option is <= the second to last command");
+                    Command nextCommand = dialogueData.commands[command.index + 1];
+                    if (nextCommand.token.type != "option")
                     {
+                        // Console.WriteLine("next ready setting to false");
                         dialogueData.dialogueInterpreter.nextReady = false;
                     }
                 }
                 return 1;
             },
-            1
+            2
         )},
         {"jump", new CommandContainer(
             null,
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                string labelName = command.args[0];
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string labelName = command.args[0].value;
                 if (!command.conversation.labels.ContainsKey(labelName))
                 {
                     error = $"Jump label \"{labelName}\" does not exist in this conversation";
@@ -267,9 +395,15 @@ public class DialogueInterpreter
                 }
                 return 1;
             },
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                string labelName = command.args[0];
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string labelName = command.args[0].value;
                 int labelIndex = command.conversation.labels[labelName];
                 dialogueData.dialogueInterpreter.currentIndex = labelIndex;
                 return 1;
@@ -279,9 +413,9 @@ public class DialogueInterpreter
         {"event", new CommandContainer(
             null,
             null,
-            (DialogueData dialogueData, DialogueCommand command, out string error) => {
+            (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                string eventName = command.args[0];
+                Parser.Tokenizer.Token eventName = command.args[0];
                 dialogueData.dialogueInterpreter.events.Trigger("dialogueEvent", eventName);
                 return 1;
             },
@@ -343,9 +477,9 @@ public class DialogueInterpreter
             int tempIndex = currentIndex + 1;
             while (tempIndex < currentDialogueData.commands.Count)
             {
-                DialogueCommand command = currentDialogueData.commands[tempIndex];
+                Command command = currentDialogueData.commands[tempIndex];
 
-                if (command.token != "option")
+                if (command.token.type != "option")
                 {
                     currentIndex = tempIndex - 1;
                     break;
@@ -361,158 +495,136 @@ public class DialogueInterpreter
         return Next();
     }
 
-    private string HasValidToken(string line, out string error)
+    public int Load(string rawText, out ErrorInfo? error, out DialogueData outDialogueData)
     {
-        string token = "";
-        if (line[0] == '@')
-        {
-            string[] words = line.Split(" ", System.StringSplitOptions.RemoveEmptyEntries);
+        int errorCode = 1;
+        error = null;
+        DialogueData preprocessData = new(this);
 
-            token = words[0].Substring(1);
-
-            if (!possibleCommands.ContainsKey(token))
-            {
-                error = $"@\"{token}\" does not exist";
-                return "";
-            }
-        }
-        error = "";
-        return token;
-    }
-
-    private List<string> FindArgs(string line)
-    {
-        List<string> args = new();
-        string[] words = line.Split(" ", System.StringSplitOptions.RemoveEmptyEntries);
-        // check for arguments next to the token
-        if (words.Length > 1)
-        {
-            for (int argIndex = 1; argIndex < words.Length; argIndex++)
-            {
-                string arg = words[argIndex];
-                args.Add(arg);
-            }
-        }
-        return args;
-    }
-
-    public int Load(string rawText, out string error, out int errorLine, out DialogueData outDialogueData)
-    {
-        error = "";
-        errorLine = 0;
-
-        // extract relevant lines (no empty lines or comments)
-
-        string[] newLineSeparators = {"\r\n", "\r", "\n"};
-        string[] rawLines = rawText.Split(newLineSeparators, System.StringSplitOptions.None);
-        List<string> lines = new();
-        List<int> rawLineIndices = new();
-        for (int i = 0; i < rawLines.Length; i++)
-        {
-            string line = rawLines[i];
-            line = line.Trim();
-            // remove comments from each line
-            if (line.IndexOf("//") == 0)
-            {
-                continue;
-            }
-            if (line.Length == 0)
-            {
-                continue;
-            }
-            string[] commentSplit = line.Split("//", System.StringSplitOptions.RemoveEmptyEntries);
-            line = commentSplit[0];
-            // remove empty spaces
-            string[] words = line.Split(" ", System.StringSplitOptions.RemoveEmptyEntries);
-            line = string.Join(' ', words);
-
-            lines.Add(line);
-            rawLineIndices.Add(i);
-        }
-
-        DialogueData preprocessData = new(this, rawLineIndices);
         outDialogueData = preprocessData;
 
-        // preprocess the commands to find all conversations and labels and characters in each conversation
-        for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+
+        Parser parser = new();
+        List<Parser.Tokenizer.Token> tokens = parser.Parse(rawText);
+
+        outDialogueData.tokens = tokens;
+
+        // Console.WriteLine("TOKENS FOUND:");
+
+        // foreach (Parser.Tokenizer.Token token in tokens)
+        // {
+        //     Console.WriteLine($"(Ln {token.LineNumber}, Col {token.ColumnNumber}) TYPE: [{token.type}] VALUE: [{token.value}]");
+        // }
+
+        // get/create all commands
+        for (int index = 0; index < tokens.Count; index++)
         {
-            errorLine = rawLineIndices[lineIndex] + 1;
-            string line = lines[lineIndex];
-            string token = HasValidToken(line, out string tokenError);
+            Parser.Tokenizer.Token token = tokens[index];
 
-            // check if valid token
-            if (tokenError.Length > 0)
-            {
-                error = $"Token Error (Line {errorLine}) - {tokenError}";
-                return 0;
-            }
+            // Console.WriteLine($"checking for command, text: [{token.type}] [{token.value}]");
 
-            // check for the first conversation command
-            if (preprocessData.conversation == null)
+            // check if command
+            if (token.type == "command-prefix")
             {
-                if (token != "conversation")
+             
+                // Console.WriteLine("found command prefix, looking for command name");
+
+                index += 1;
+
+                if (index == tokens.Count)
                 {
-                    error = $"Preprocess Error (Line {errorLine}) - All dialogue must be contained within a @conversation command (the first command should be @conversation)";
+                    error = new("Parse", token, $"Unexpected end of script");
                     return 0;
                 }
 
-                preprocessData.conversation = new Conversation(lineIndex);
-            }
+                Parser.Tokenizer.Token commandToken = tokens[index];
 
-            List<string>? args;
+                // Console.WriteLine($"found command name {commandToken.type}");
 
-            // check if the line is a text line
-            if (token.Length == 0)
-            {
-                token = "text";
-                args = new()
+                // get args
+                List<Parser.Tokenizer.Token> args = new();
+                for (index += 1; index < tokens.Count && tokens[index].type != "comment" && tokens[index].type != "command-prefix" && tokens[index].type != "text"; index++)
                 {
-                    line
-                };
+                    args.Add(tokens[index]);
+                }
+
+                index -= 1;
+
+                int commandIndex = preprocessData.commands.Count; // refers to the command index in the command list, not token list
+                Command command = new(commandIndex, commandToken, preprocessData.conversation, args);
+
+
+                // add to preprocess data
+                preprocessData.commands.Add(command);
+
             }
-            else
+            else if (token.type == "text")
             {
-                args = FindArgs(line);
+                Command command = new(index, token, preprocessData.conversation, new Parser.Tokenizer.Token[] {token});
+
+                // add to preprocess data
+                preprocessData.commands.Add(command);
             }
-
-            DialogueCommand command = new(lineIndex, preprocessData.conversation, token, args);
-
-            if (possibleCommands[token].Preprocess(preprocessData, command, out string preprocessError) == 0)
+            else if (token.type != "comment")
             {
-                error = $"Preprocess Error (Line {errorLine}) - {preprocessError}";
-                return 0;
+                error = new("Parse", token, $"Unexpected token type [{token.type}]");
+                errorCode = 0;
+                // return 0;
             }
-
-            preprocessData.commands.Add(command);
         }
 
-
-        // validate all commands
-        foreach (DialogueCommand command in preprocessData.commands)
+        // preprocess commands
+        for (int index = 0; index < preprocessData.commands.Count; index++)
         {
-            if (possibleCommands[command.token].Validate(preprocessData, command, out string validateError) == 0)
+            Command command = preprocessData.commands[index];
+            Parser.Tokenizer.Token token = command.token;
+
+            // Console.WriteLine($"preprocess --- lookg at command {token.type}");
+
+            if (!possibleCommands.ContainsKey(token.type))
             {
-                errorLine = rawLineIndices[command.index] + 1;
-                error = $"Validate Error (Line {errorLine}) - {validateError}";
+                error = new("Preprocess", token, $"Command [{token.type}] does not exist");
+                return 0;
+            }
+
+
+            command.conversation = preprocessData.conversation;
+
+            int result = possibleCommands[token.type].Preprocess(preprocessData, command, out string errorMessage);
+            if (result == 0)
+            {
+                error = new("Preprocess", token, $"@{token.type} Error - {errorMessage}");
                 return 0;
             }
         }
 
-        currentDialogueData = preprocessData;
-        return 1;
+        // validate commands
+        for (int index = 0; index < preprocessData.commands.Count; index++)
+        {
+            Command command = preprocessData.commands[index];
+            Parser.Tokenizer.Token token = command.token;
 
+            int result = possibleCommands[token.type].Validate(preprocessData, command, out string errorMessage);
+            if (result == 0)
+            {
+                error = new("Validate", token, $"@{token.type} Error - {errorMessage}");
+                return 0;
+            }
+
+        }
+
+        if (errorCode == 1)
+        {
+            currentDialogueData = preprocessData;
+        }
+
+        return errorCode;
     }
 
-    public int Load(string rawText, out string error, out int errorLine)
-    {
-        return Load(rawText, out error, out errorLine, out _);
-    }
-
-    public int Load(string rawText, out string error)
+    public int Load(string rawText, out ErrorInfo? error)
     {
         return Load(rawText, out error, out _);
     }
-
     public int Load(string rawText)
     {
         return Load(rawText, out _);
@@ -528,8 +640,8 @@ public class DialogueInterpreter
         nextReady = true;
         while (currentIndex < dialogueData.commands.Count)
         {
-            DialogueCommand command = dialogueData.commands[currentIndex];
-            int result = possibleCommands[command.token].Resolve(dialogueData, command, out string error);
+            Command command = dialogueData.commands[currentIndex];
+            int result = possibleCommands[command.token.type].Resolve(dialogueData, command, out string error);
             // Console.WriteLine($"command: {command.token}, index: {currentIndex}, result: {result}");
             if (result == 0)
             {

@@ -29,13 +29,13 @@ Well, I could be better...
 // as well as jump to labeled parts of the dialogue
 
 // use _ if you don't want to jump and just continue after the options
-@option _ I see... 
+@option _ "I see... "
 
 // jumps to the label named "problem", and displays on a button "What's wrong?"
-@option problem What's wrong? 
+@option problem "What's wrong?" 
 
 // jumps to the label named "fight"
-@option fight I don't care! 
+@option fight "I don't care! "
 
 @speak personB
 Yea..
