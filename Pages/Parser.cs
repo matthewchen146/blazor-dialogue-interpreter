@@ -922,19 +922,36 @@ namespace Parser
 
             if (group.children.Count == 0)
             {
+                bool success = false;
+
                 // check terminal
                 if (terminals.TryGetValue(group.value, out TokenValidator? validator))
                 {
                     string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
                     if (tokenValue != null)
                     {
-                        // found valid token
+                        // found valid and matching token
                         Token token = new(group.value, tokenValue, index, 0, 0);
                         parsedTokens.Add(token);
+                        success = true;
                     }
                 }
-                string success = parsedTokens.Count > 0 ? $"SCSS [{parsedTokens[0].value}]" : "FAIL";
-                Console.WriteLine($"checking {group.value} - {success}");
+
+                // if terminal doesnt match, look for one that does
+                // foreach (string type in terminals.Keys)
+                // {
+                //     validator = terminals[type];
+                //     string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
+                //     if (tokenValue != null)
+                //     {
+                //         // found valid token
+                //         Token token = new(group.value, tokenValue, index, 0, 0);
+                //         parsedTokens.Add(token);
+                //     }
+                // }
+
+                string successText = success ? $"SCSS [{parsedTokens[0].value}]" : "FAIL";
+                Console.WriteLine($"checking {group.value} - {successText}");
                 return parsedTokens;
             }
            
