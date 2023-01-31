@@ -1,111 +1,20 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Parser;
 
 #nullable enable
 public class DialogueInterpreter
 {
-    public class ErrorInfo
-    {
-        public string type = "";
-        public string message = "Error";
-        public int lineIndex = 0;
-        public int LineNumber
-        {
-            set
-            {}
-            get
-            {
-                return lineIndex + 1;
-            }
-        }
-        public int columnIndex = 0;
-        public int ColumnNumber
-        {
-            set
-            {}
-            get
-            {
-                return columnIndex + 1;
-            }
-        }
-        public Parser.Tokenizer.Token? token = null;
-        public ErrorInfo(int _lineIndex, int _columnIndex, string _message)
-        {
-            lineIndex = _lineIndex;
-            columnIndex = _columnIndex;
-            message = _message;
-        }
 
-        public ErrorInfo(int _lineIndex, string _message)
-        {
-            lineIndex = _lineIndex;
-            columnIndex = 0;
-            message = _message;
-        }
-
-        public ErrorInfo(Parser.Tokenizer.Token _token, string _message)
-        {
-            lineIndex = _token.lineIndex;
-            columnIndex = _token.columnIndex;
-            token = _token;
-            message = _message;
-        }
-
-        public ErrorInfo(string _message)
-        {
-            message = _message;
-        }
-
-        public ErrorInfo(string _type, int _lineIndex, int _columnIndex, string _message)
-        {
-            type = _type;
-            lineIndex = _lineIndex;
-            columnIndex = _columnIndex;
-            message = _message;
-        }
-
-        public ErrorInfo(string _type, int _lineIndex, string _message)
-        {
-            type = _type;
-            lineIndex = _lineIndex;
-            columnIndex = 0;
-            message = _message;
-        }
-
-        public ErrorInfo(string _type, Parser.Tokenizer.Token _token, string _message)
-        {
-            type = _type;
-            lineIndex = _token.lineIndex;
-            columnIndex = _token.columnIndex;
-            token = _token;
-            message = _message;
-        }
-
-        public ErrorInfo(string _type, string _message)
-        {
-            type = _type;
-            message = _message;
-        }
-
-        public ErrorInfo()
-        {
-
-        }
-
-        public override string ToString()
-        {
-            return (type.Length > 0 ? $"{type} Error " : "") + $"(Ln {LineNumber} Col {ColumnNumber}) - " + message;
-        }
-    }
     public class Command 
     {
-        public List<Parser.Tokenizer.Token> args = new();
-        public Parser.Tokenizer.Token token;
+        public List<Token> args = new();
+        public Token token;
         public Conversation? conversation;
         public int index = 0;
         // public Conversation conversation;
-        public Command(int _index, Parser.Tokenizer.Token _token, Conversation? _conversation, IEnumerable<Parser.Tokenizer.Token> _args)
+        public Command(int _index, Token _token, Conversation? _conversation, IEnumerable<Token> _args)
         {
             index = _index;
             token = _token;
@@ -145,7 +54,7 @@ public class DialogueInterpreter
         public DialogueInterpreter dialogueInterpreter;
         public Dictionary<string, Conversation> conversations = new();
         public Conversation? conversation = null;
-        public List<Parser.Tokenizer.Token> tokens = new();
+        public List<Token> tokens = new();
 
         public DialogueData(DialogueInterpreter _dialogueInterpreter)
         {
@@ -265,7 +174,7 @@ public class DialogueInterpreter
                     return 0;
                 }
                 Dictionary<string, int> characters = new();
-                foreach (Parser.Tokenizer.Token token in command.args)
+                foreach (Token token in command.args)
                 {
                     string name = token.value;
                     if (characters.ContainsKey(name))
@@ -415,7 +324,7 @@ public class DialogueInterpreter
             null,
             (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                Parser.Tokenizer.Token eventName = command.args[0];
+                Token eventName = command.args[0];
                 dialogueData.dialogueInterpreter.events.Trigger("dialogueEvent", eventName);
                 return 1;
             },
@@ -504,14 +413,21 @@ public class DialogueInterpreter
         outDialogueData = preprocessData;
 
 
-        Parser parser = new();
-        List<Parser.Tokenizer.Token> tokens = parser.Parse(rawText);
+        Parser.Parser parser = new();
+        List<Token> tokens = parser.Parse(rawText, out string parseError);
 
         outDialogueData.tokens = tokens;
 
+        if (parseError.Length > 0)
+        {
+            error = new("Parse", tokens[tokens.Count - 1].lineIndex, parseError);
+            return 0;
+        }
+        
+
         // Console.WriteLine("TOKENS FOUND:");
 
-        // foreach (Parser.Tokenizer.Token token in tokens)
+        // foreach (Token token in tokens)
         // {
         //     Console.WriteLine($"(Ln {token.LineNumber}, Col {token.ColumnNumber}) TYPE: [{token.type}] VALUE: [{token.value}]");
         // }
@@ -519,7 +435,7 @@ public class DialogueInterpreter
         // get/create all commands
         for (int index = 0; index < tokens.Count; index++)
         {
-            Parser.Tokenizer.Token token = tokens[index];
+            Token token = tokens[index];
 
             // Console.WriteLine($"checking for command, text: [{token.type}] [{token.value}]");
 
@@ -537,12 +453,12 @@ public class DialogueInterpreter
                     return 0;
                 }
 
-                Parser.Tokenizer.Token commandToken = tokens[index];
+                Token commandToken = tokens[index];
 
                 // Console.WriteLine($"found command name {commandToken.type}");
 
                 // get args
-                List<Parser.Tokenizer.Token> args = new();
+                List<Token> args = new();
                 for (index += 1; index < tokens.Count && tokens[index].type != "comment" && tokens[index].type != "command-prefix" && tokens[index].type != "text"; index++)
                 {
                     args.Add(tokens[index]);
@@ -560,7 +476,7 @@ public class DialogueInterpreter
             }
             else if (token.type == "text")
             {
-                Command command = new(index, token, preprocessData.conversation, new Parser.Tokenizer.Token[] {token});
+                Command command = new(index, token, preprocessData.conversation, new Token[] {token});
 
                 // add to preprocess data
                 preprocessData.commands.Add(command);
@@ -577,7 +493,7 @@ public class DialogueInterpreter
         for (int index = 0; index < preprocessData.commands.Count; index++)
         {
             Command command = preprocessData.commands[index];
-            Parser.Tokenizer.Token token = command.token;
+            Token token = command.token;
 
             // Console.WriteLine($"preprocess --- lookg at command {token.type}");
 
@@ -602,7 +518,7 @@ public class DialogueInterpreter
         for (int index = 0; index < preprocessData.commands.Count; index++)
         {
             Command command = preprocessData.commands[index];
-            Parser.Tokenizer.Token token = command.token;
+            Token token = command.token;
 
             int result = possibleCommands[token.type].Validate(preprocessData, command, out string errorMessage);
             if (result == 0)

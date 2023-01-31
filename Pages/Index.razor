@@ -89,7 +89,7 @@
         string scriptViewText = "";
         @* string scriptViewText = script; *@
 
-        int lineIndex = 0;
+        @* int lineIndex = 0; *@
         int columnIndex = 0;
 
         Console.WriteLine("populating Fancy Script View");
@@ -101,11 +101,11 @@
             Parser.Tokenizer.Token token = dialogueData.tokens[index];
 
             string whitespace = "";
-            while (token.lineIndex > lineIndex)
+            while (token.lineIndex >= scriptLines.Count)
             {
                 scriptLines.Add("");
                 columnIndex = 0;
-                lineIndex += 1;
+                @* lineIndex += 1; *@
             }
             while (token.columnIndex > columnIndex)
             {
@@ -126,8 +126,31 @@
                 classes.Add("command");
             }
 
-            scriptLines[scriptLines.Count - 1] += $"<span class='{string.Join(' ', classes)}'>{whitespace + token.value}</span>";
+            scriptLines[token.lineIndex] += $"<span class='{string.Join(' ', classes)}'>{whitespace + token.value}</span>";
 
+        }
+
+        Parser.Tokenizer.Token lastToken = dialogueData.tokens[dialogueData.tokens.Count - 1];
+        Console.WriteLine($"DIFFERENCE IN LENGTH: {lastToken.index + lastToken.value.Length}, {script.Length}");
+
+        int lastIndex = lastToken.index + lastToken.value.Length;
+
+        // fill remaining text
+        while (lastIndex < script.Length)
+        {
+            if (script[lastIndex] == '\n')
+            {
+                scriptLines.Add("");
+                lastIndex++;
+            }
+            if (lastIndex == script.Length)
+            {
+                break;
+            }
+
+            scriptLines[scriptLines.Count - 1] += script[lastIndex];
+
+            lastIndex++;
         }
 
         for (int index = 0; index < scriptLines.Count; index++)
@@ -145,8 +168,7 @@
             scriptViewText += $"{newline}<span class='script-line {string.Join(' ', classes)}' data-line='{index + 1}'>{line}</span>";
         }
 
-        Parser.Tokenizer.Token lastToken = dialogueData.tokens[dialogueData.tokens.Count - 1];
-        Console.WriteLine($"DIFFERENCE IN LENGTH: {lastToken.index + lastToken.value.Length}, {script.Length}");
+        
 
 
         string conversationSelectorInnerHTML = "";
@@ -186,7 +208,7 @@
     private void Parse()
     {
         Parser parser = new();
-        parser.Parse(script);
+        parser.Parse(script, out string _);
     }
 
     [JSInvokable]
