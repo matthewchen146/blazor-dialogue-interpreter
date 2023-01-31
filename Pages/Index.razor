@@ -1,7 +1,7 @@
 ﻿@page "/"
 @inject HttpClient Http
 @inject IJSRuntime JS
-@using System.Timers
+@using Parser
 
 <PageTitle>Dialogue Interpreter</PageTitle>
 
@@ -79,17 +79,17 @@
     {
         script = newScript;
 
-        int result = dialogueInterpreter.Load(script, out DialogueInterpreter.ErrorInfo error, out DialogueInterpreter.DialogueData dialogueData);
+        int result = dialogueInterpreter.Load(script, out ErrorInfo? error, out DialogueInterpreter.DialogueData dialogueData);
 
-        if (result == 0)
+        if (result == 0 && error != null)
         {
             Log($"Dialogue Error - {error}", 2);
         }
 
-        string scriptViewText = "";
-        @* string scriptViewText = script; *@
+        return;
 
-        @* int lineIndex = 0; *@
+        string scriptViewText = "";
+
         int columnIndex = 0;
 
         Console.WriteLine("populating Fancy Script View");
@@ -98,23 +98,19 @@
 
         for (int index = 0; index < dialogueData.tokens.Count; index++)
         {
-            Parser.Tokenizer.Token token = dialogueData.tokens[index];
+            Token token = dialogueData.tokens[index];
 
             string whitespace = "";
             while (token.lineIndex >= scriptLines.Count)
             {
                 scriptLines.Add("");
                 columnIndex = 0;
-                @* lineIndex += 1; *@
             }
             while (token.columnIndex > columnIndex)
             {
                 whitespace += ' ';
                 columnIndex += 1;
             }
-
-            @* Console.WriteLine($"add token {token.value}");
-            Console.WriteLine($"curCol: {columnIndex}, tokenCol: {token.columnIndex}"); *@
 
             columnIndex += ((string)token.value).Length;
 
@@ -130,7 +126,7 @@
 
         }
 
-        Parser.Tokenizer.Token lastToken = dialogueData.tokens[dialogueData.tokens.Count - 1];
+        Token lastToken = dialogueData.tokens[dialogueData.tokens.Count - 1];
         Console.WriteLine($"DIFFERENCE IN LENGTH: {lastToken.index + lastToken.value.Length}, {script.Length}");
 
         int lastIndex = lastToken.index + lastToken.value.Length;
@@ -160,7 +156,7 @@
 
             List<string> classes = new();
 
-            if (result == 0 && error.lineIndex == index)
+            if (result == 0 && error != null && error.lineIndex == index)
             {
                 classes.Add("error");
             }
@@ -207,8 +203,8 @@
 
     private void Parse()
     {
-        Parser parser = new();
-        parser.Parse(script, out string _);
+        @* Parser.Parser parser = new();
+        parser.Parse(script, out string _); *@
     }
 
     [JSInvokable]

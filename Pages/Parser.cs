@@ -97,6 +97,30 @@ namespace Parser
         }
     }
 
+    public class Position
+    {
+        public int index = 0;
+        public int lineIndex = 0;
+        public int columnIndex = 0;
+        public int LineNumber {
+            set
+            {}
+            get
+            {
+                return lineIndex + 1;
+            }
+        }
+        public int ColumnNumber
+        {
+            set
+            {}
+            get
+            {
+                return columnIndex + 1;
+            }
+        }
+    }
+
     public class Token 
     {
         public string type = "";
@@ -193,12 +217,88 @@ namespace Parser
     //     }
     // }
 
+    public static class Specification
+    {
+        // dictionary mapping symbol (type) to expression (group)
+        // if the parser can't find a symbol in the dictionary, it will assume that it should check for exact match (keyword)
+        public static Dictionary<string, Group> nonterminals = new() {
+            {
+                /* <program> ::= {<line>}* */
+                "program", new Group(true, true, "line")
+            },
+            // {
+            //     /* <line-wrapper> ::= <newline> <line> | <line> */
+            //     "line-wrapper", new Group(new OrderedGroup("newline", "line"), "line", "newline")
+            // },
+            {
+                /* <line> ::= 
+                    | <line-content> {comment}
+                    | <separator-newline> <line-content> {comment}
+                    | <separator-newline> {comment}
+                    | {comment}
+                */
+                "line", new Group(
+                    new OrderedGroup(
+                        new Group("line-content", new OrderedGroup("separator-newline", "line-content"), "separator-newline"), 
+                        new Group(true, "comment")
+                    ),
+                    new Group(true, "comment")
+                )
+            },
+            {
+                "line-content", new Group("command-line", "text")
+            },
+            {
+                /* <command-line> ::= '@' <command> */
+                "command-line", new OrderedGroup("command-prefix", "command")
+            },
+            {
+                /* <command> ::= 
+                    | <conversation-command> 
+                    | <enter-command>
+                    | <speak-command>
+                    | ... 
+                */
+                "command", new Group("conversation-command", "enter-command", "speak-command", "label-command", "jump-command", "option-command")
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "conversation-command", new OrderedGroup("conversation", "separator", "id")
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "enter-command", new OrderedGroup("enter", "separator", "id", new OrderedGroup(true, "separator", "string"))
+            },
+            {
+                /* <speak-command> ::= 'speak' <string-or-id> 
+                   
+                   <string-or-id> ::= <string> | <id>
+                */
+                "speak-command", new OrderedGroup("speak", "separator", new Group("string", "id"))
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "label-command", new OrderedGroup("label", "separator", "id")
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "jump-command", new OrderedGroup("jump", "separator", "id")
+            },
+            {
+                /* <conversation-command> ::= 'conversation' <id> */
+                "option-command", new OrderedGroup("option", "separator", "id", "separator", "string")
+            },
+        };
+    } 
+
+
     // in BNF terms: an expression
     public class Group 
     {
         // public List<Term> terms = new();
         public bool repeatable = false;
         public bool optional = false;
+        public string value = "";
         public List<Group> children = new();
 
         public Group(bool _optional, bool _repeatable, params object[] args)
@@ -231,6 +331,11 @@ namespace Parser
                     children.Add(group);
                 }
             }
+        }
+
+        public Group(string _value)
+        {
+            value = _value;
         }
 
         public Group(params object[] args)
@@ -284,77 +389,17 @@ namespace Parser
 
         
 
-        // dictionary mapping symbol (type) to expression (group)
-        // if the parser can't find a symbol in the dictionary, it will assume that it should check for exact match (keyword)
-        public static Dictionary<string, Group> specification = new() {
-            {
-                /* <program> ::= {<line>}* */
-                "program", new Group(true, true, "line")
-            },
-            // {
-            //     /* <line-wrapper> ::= <newline> <line> | <line> */
-            //     "line-wrapper", new Group(new OrderedGroup("newline", "line"), "line", "newline")
-            // },
-            {
-                /* <line> ::= 
-                    | <comment> 
-                    | <command-line> {<comment>} 
-                    | <text> {<comment>}
-                */
-                "line", new OrderedGroup(new Group("line-content", new OrderedGroup("newline", "line-content"), "newline"), new Group(true, "comment"))
-            },
-            {
-                "line-content", new Group("command-line", "text")
-            },
-            {
-                /* <command-line> ::= '@' <command> */
-                "command-line", new OrderedGroup("command-prefix", "command")
-            },
-            {
-                /* <command> ::= 
-                    | <conversation-command> 
-                    | <enter-command>
-                    | <speak-command>
-                    | ... 
-                */
-                "command", new Group("conversation-command", "enter-command", "speak-command", "label-command", "jump-command", "option-command")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "conversation-command", new OrderedGroup("conversation", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "enter-command", new OrderedGroup("enter", "id", new Group(true, "string"))
-            },
-            {
-                /* <speak-command> ::= 'speak' <string-or-id> 
-                   
-                   <string-or-id> ::= <string> | <id>
-                */
-                "speak-command", new OrderedGroup("speak", new Group("string", "id"))
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "label-command", new OrderedGroup("label", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "jump-command", new OrderedGroup("jump", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "option-command", new OrderedGroup("option", "id", "string")
-            },
-        };
+        
 
         static TokenValidator CreateMatchExact(string toMatch)
         {
             return (ref string text, int startIndex, out int endIndex) => {
                 endIndex = startIndex;
                 int matchIndex = 0;
+
                 while (startIndex < text.Length && matchIndex < toMatch.Length)
                 {
+                    // Console.WriteLine($"Matching {matchIndex} {text[startIndex]} - {toMatch[matchIndex]}");
                     if (text[startIndex] != toMatch[matchIndex])
                     {
                         return null;
@@ -444,6 +489,50 @@ namespace Parser
                 "newline", CreateMatchExact("\n")
             },
             {
+                "separator-newline", (ref string text, int startIndex, out int endIndex) => {
+                    
+                    endIndex = startIndex;
+                    string target = "";
+
+                    if (text[startIndex] == '\n')
+                    {
+                        endIndex = startIndex + 1;
+                        return "\n";
+                    }
+
+                    while (text[startIndex] != '\n' && startIndex < text.Length)
+                    {
+                        if (!separator.ContainsKey(text[startIndex]))
+                        {
+                            // if anything but space and tab is found
+                            return null;
+                        }
+
+                        target += text[startIndex];
+                        startIndex += 1;
+                    }
+
+                    endIndex = startIndex;
+                    return target;
+                }
+            },
+            {
+                "separator", (ref string text, int startIndex, out int endIndex) => {
+                    
+                    endIndex = startIndex;
+                    string target = "";
+
+                    while (separator.ContainsKey(text[startIndex]) && startIndex < text.Length)
+                    {
+                        target += text[startIndex];
+                        startIndex += 1;
+                    }
+
+                    endIndex = startIndex;
+                    return target;
+                }
+            },
+            {
                 "command-prefix", CreateMatchExact("@")
             },
             {
@@ -528,27 +617,32 @@ namespace Parser
                         startIndex += 1;
                     }
 
+                    if (target.Length == 0)
+                    {
+                        return null;
+                    }
+
                     endIndex = startIndex;
                     return target;
                 }
             },
             {
-                "conversation", CreateMatchExact("conversation ")
+                "conversation", CreateMatchExact("conversation")
             },
             {
-                "enter", CreateMatchExact("enter ")
+                "enter", CreateMatchExact("enter")
             },
             {
-                "speak", CreateMatchExact("speak ")
+                "speak", CreateMatchExact("speak")
             },
             {
-                "label", CreateMatchExact("label ")
+                "label", CreateMatchExact("label")
             },
             {
-                "jump", CreateMatchExact("jump ")
+                "jump", CreateMatchExact("jump")
             },
             {
-                "option", CreateMatchExact("option ")
+                "option", CreateMatchExact("option")
             },
             {
                 "id", (ref string text, int startIndex, out int endIndex) => {
@@ -590,6 +684,7 @@ namespace Parser
         private int newlineCount = 0;
         private int lineColumnCount = 0;
         public static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\t', true}, {'\n', true}};
+        public static readonly Dictionary<char, bool> separator = new() {{' ', true}, {'\t', true}};
 
         void AdvanceIndex()
         {
@@ -813,25 +908,71 @@ namespace Parser
         //     return null;
         // }
 
-        public List<Token> Parse(ref string text, List<ErrorInfo> errors, string type, int index)
+        public List<Token> Parse(ref string text, List<ErrorInfo> errors, Group group, int index = 0)
         {
+            if (Specification.nonterminals.TryGetValue(group.value, out Group? specGroup))
+            {
+                specGroup.value = group.value;
+                group = specGroup;
+            }
+
+            // Console.WriteLine($"prediction - {group.value}");
+
             List<Token> parsedTokens = new();
 
-            if (specification.TryGetValue(type, out Group? group))
+            if (group.children.Count == 0)
             {
+                // check terminal
+                if (terminals.TryGetValue(group.value, out TokenValidator? validator))
+                {
+                    string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
+                    if (tokenValue != null)
+                    {
+                        // found valid token
+                        Token token = new(group.value, tokenValue, index, 0, 0);
+                        parsedTokens.Add(token);
+                    }
+                }
+                string success = parsedTokens.Count > 0 ? $"SCSS [{parsedTokens[0].value}]" : "FAIL";
+                Console.WriteLine($"checking {group.value} - {success}");
+                return parsedTokens;
+            }
+           
+
+            for (int iter = 0; ((iter < 1 && !group.repeatable) || group.repeatable) && iter < 200; iter++)
+            {
+                
+                int nextIndex = parsedTokens.Count > 0 ? parsedTokens[^1].index + parsedTokens[^1].value.Length : index;
+                if (parsedTokens.Count > 0)
+                {
+                    Console.WriteLine($"next index: [{nextIndex}] last token: [{parsedTokens[^1].value}]");
+                }
+                
+
+                if (nextIndex >= text.Length)
+                {
+                    return parsedTokens;
+                }
+
                 // check group
                 if (group is OrderedGroup)
                 {
                     List<Token> groupTokens = new();
 
                     // check all success
-                    foreach (Term term in group.terms)
+                    foreach (Group child in group.children)
                     {
-                        List<Token> resultingTokens = Parse(ref text, errors, term.Value, index);
-
-                        if (resultingTokens.Count == 0)
+                        int groupNextIndex = nextIndex;
+                        if (groupTokens.Count > 0)
                         {
-                            return resultingTokens;
+                            groupNextIndex = groupTokens[^1].index + groupTokens[^1].value.Length;
+                        }
+
+                        List<Token> resultingTokens = Parse(ref text, errors, child, groupNextIndex);
+
+                        if (resultingTokens.Count == 0 && !child.optional)
+                        {
+                            break;
                         }
 
                         groupTokens.AddRange(resultingTokens);
@@ -843,36 +984,52 @@ namespace Parser
                 else
                 {
                     // check one success
-                    foreach (Term term in group.terms)
+                    foreach (Group child in group.children)
                     {
-                        List<Token> resultingTokens = Parse(ref text, errors, term.Value, index);
+                        List<Token> resultingTokens = Parse(ref text, errors, child, nextIndex);
 
                         if (resultingTokens.Count > 0)
                         {
-                            return resultingTokens;
+                            parsedTokens.AddRange(resultingTokens);
+                            break;
                         }
-                    }
-                }
-
-                
-            }
-            else
-            {
-                // check terminal
-                if (terminals.TryGetValue(type, out TokenValidator? validator))
-                {
-                    string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
-                    if (tokenValue != null)
-                    {
-                        // found valid token
-                        Token token = new(type, tokenValue, index, 0, 0);
-                        parsedTokens.Add(token);
                     }
                 }
             }
 
             return parsedTokens;
+        }
+
+        public List<Token> Parse(ref string text, List<ErrorInfo> errors, string type, int index = 0)
+        {
+            if (Specification.nonterminals.TryGetValue(type, out Group? group))
+            {
+                
+                group.value = type;
+                return Parse(ref text, errors, group, index);
+                
+            }
+
+            List<Token> parsedTokens = new();
+
+            if (index == text.Length)
+            {
+                return parsedTokens;
+            }
             
+            // check terminal
+            if (terminals.TryGetValue(type, out TokenValidator? validator))
+            {
+                string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
+                if (tokenValue != null)
+                {
+                    // found valid token
+                    Token token = new(type, tokenValue, index, 0, 0);
+                    parsedTokens.Add(token);
+                }
+            }
+
+            return parsedTokens;
         }
 
         // public List<Token> Parse(string text, out string error, string type = "program")
