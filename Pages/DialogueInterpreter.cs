@@ -414,16 +414,15 @@ public class DialogueInterpreter
 
 
         Parser.Parser parser = new();
-        List<ErrorInfo> parseErrors = new();
-        List<Token> tokens = parser.Parse(ref rawText, parseErrors, "program");
+        List<Token> tokens = parser.Parse(ref rawText, out List<ErrorInfo> parsedErrors, "program");
 
         outDialogueData.tokens = tokens;
 
-        if (parseErrors.Count > 0)
-        {
-            error = new("Parse", tokens[tokens.Count - 1].lineIndex, parseErrors[parseErrors.Count - 1].message);
-            return 0;
-        }
+        // if (parsedErrors.Count > 0)
+        // {
+        //     error = new("Parse", tokens[tokens.Count - 1].position.lineIndex, parsedErrors[parsedErrors.Count - 1].message);
+        //     return 0;
+        // }
         
 
         Console.WriteLine("TOKENS FOUND:");
@@ -431,6 +430,13 @@ public class DialogueInterpreter
         foreach (Token token in tokens)
         {
             Console.WriteLine($"(Ln {token.LineNumber}, Col {token.ColumnNumber}) TYPE: [{token.type}] VALUE: [{token.value}]");
+        }
+
+        Console.WriteLine("ERRORS FOUND:");
+
+        foreach (ErrorInfo errorInfo in parsedErrors)
+        {
+            Console.WriteLine($"ERROR: {errorInfo}");
         }
 
         // get/create all commands

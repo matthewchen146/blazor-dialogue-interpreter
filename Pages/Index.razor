@@ -86,7 +86,7 @@
             Log($"Dialogue Error - {error}", 2);
         }
 
-        return;
+        @* return; *@
 
         string scriptViewText = "";
 
@@ -101,12 +101,12 @@
             Token token = dialogueData.tokens[index];
 
             string whitespace = "";
-            while (token.lineIndex >= scriptLines.Count)
+            while (token.position.lineIndex >= scriptLines.Count)
             {
                 scriptLines.Add("");
                 columnIndex = 0;
             }
-            while (token.columnIndex > columnIndex)
+            while (token.position.columnIndex > columnIndex)
             {
                 whitespace += ' ';
                 columnIndex += 1;
@@ -122,14 +122,14 @@
                 classes.Add("command");
             }
 
-            scriptLines[token.lineIndex] += $"<span class='{string.Join(' ', classes)}'>{whitespace + token.value}</span>";
+            scriptLines[token.position.lineIndex] += $"<span class='{string.Join(' ', classes)}'>{whitespace + token.value}</span>";
 
         }
 
         Token lastToken = dialogueData.tokens[dialogueData.tokens.Count - 1];
-        Console.WriteLine($"DIFFERENCE IN LENGTH: {lastToken.index + lastToken.value.Length}, {script.Length}");
+        Console.WriteLine($"DIFFERENCE IN LENGTH: {lastToken.position.index + lastToken.value.Length}, {script.Length}");
 
-        int lastIndex = lastToken.index + lastToken.value.Length;
+        int lastIndex = lastToken.position.index + lastToken.value.Length;
 
         // fill remaining text
         while (lastIndex < script.Length)
@@ -156,7 +156,7 @@
 
             List<string> classes = new();
 
-            if (result == 0 && error != null && error.lineIndex == index)
+            if (result == 0 && error != null && error.position.lineIndex == index)
             {
                 classes.Add("error");
             }

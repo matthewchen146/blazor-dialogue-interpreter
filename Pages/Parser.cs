@@ -7,14 +7,14 @@ namespace Parser
     {
         public string type = "";
         public string message = "Error";
-        public int lineIndex = 0;
+        public Position position = new();
         public int LineNumber
         {
             set
             {}
             get
             {
-                return lineIndex + 1;
+                return position.LineNumber;
             }
         }
         public int columnIndex = 0;
@@ -24,28 +24,27 @@ namespace Parser
             {}
             get
             {
-                return columnIndex + 1;
+                return position.ColumnNumber;
             }
         }
         public Token? token = null;
-        public ErrorInfo(int _lineIndex, int _columnIndex, string _message)
+        public ErrorInfo(int lineIndex, int columnIndex, string _message)
         {
-            lineIndex = _lineIndex;
-            columnIndex = _columnIndex;
+            position.lineIndex = lineIndex;
+            position.columnIndex = columnIndex;
             message = _message;
         }
 
-        public ErrorInfo(int _lineIndex, string _message)
+        public ErrorInfo(int lineIndex, string _message)
         {
-            lineIndex = _lineIndex;
+            position.lineIndex = lineIndex;
             columnIndex = 0;
             message = _message;
         }
 
         public ErrorInfo(Token _token, string _message)
         {
-            lineIndex = _token.lineIndex;
-            columnIndex = _token.columnIndex;
+            position.Set(_token.position);
             token = _token;
             message = _message;
         }
@@ -55,18 +54,18 @@ namespace Parser
             message = _message;
         }
 
-        public ErrorInfo(string _type, int _lineIndex, int _columnIndex, string _message)
+        public ErrorInfo(string _type, int lineIndex, int columnIndex, string _message)
         {
             type = _type;
-            lineIndex = _lineIndex;
-            columnIndex = _columnIndex;
+            position.lineIndex = lineIndex;
+            position.columnIndex = columnIndex;
             message = _message;
         }
 
-        public ErrorInfo(string _type, int _lineIndex, string _message)
+        public ErrorInfo(string _type, int lineIndex, string _message)
         {
             type = _type;
-            lineIndex = _lineIndex;
+            position.lineIndex = lineIndex;
             columnIndex = 0;
             message = _message;
         }
@@ -74,8 +73,7 @@ namespace Parser
         public ErrorInfo(string _type, Token _token, string _message)
         {
             type = _type;
-            lineIndex = _token.lineIndex;
-            columnIndex = _token.columnIndex;
+            position.Set(_token.position);
             token = _token;
             message = _message;
         }
@@ -119,21 +117,105 @@ namespace Parser
                 return columnIndex + 1;
             }
         }
+
+        public Position(int _index = 0, int _lineIndex = 0, int _columnIndex = 0)
+        {
+            index = _index;
+            lineIndex = _lineIndex;
+            columnIndex = _columnIndex;
+        }
+
+        public Position(Position position)
+        {
+            Set(position);
+        }
+
+        public Position Clone()
+        {
+            Position clone = new();
+            clone.index = index;
+            clone.lineIndex = lineIndex;
+            clone.columnIndex = columnIndex;
+            return clone;
+        }
+
+        public void Set(Position position)
+        {
+            index = position.index;
+            lineIndex = position.lineIndex;
+            columnIndex = position.columnIndex;
+        }
+
+        public static Dictionary<int, List<int>> newlineIndices = new();
+        public static void CalculateLineAndColumn(ref string text, Position position)
+        {
+            int stringHash = text.GetHashCode();
+
+            List<int> indexList;
+
+            if (!newlineIndices.ContainsKey(stringHash))
+            {
+                indexList = new();
+                newlineIndices.Add(stringHash, indexList);
+                // process text to find all indices where new line occurs
+                for (int index = 0; index < text.Length; index++)
+                {
+                    if (text[index] == '\n')
+                    {
+                        indexList.Add(index);
+                    }
+                }
+            }
+            else
+            {
+                indexList = newlineIndices[stringHash];
+            }
+
+            if (indexList.Count == 0)
+            {
+                position.lineIndex = 0;
+                position.columnIndex = position.index;
+                return;
+            }
+
+            if (position.index < indexList[0])
+            {
+                position.lineIndex = 0;
+                position.columnIndex = position.index;
+                return;
+            }
+
+            for (int i = indexList.Count - 1; i >= 0; i--)
+            {
+                int testIndex = indexList[i];
+                int difference = position.index - testIndex;
+                if (difference > 0)
+                {
+                    position.lineIndex = i + 1;
+                    position.columnIndex = difference;
+                    break;
+                }
+                else if (difference == 0)
+                {
+                    position.lineIndex = i;
+                    position.columnIndex = difference;
+                    break;
+                }
+            }
+        }
     }
 
     public class Token 
     {
         public string type = "";
         public string value = "";
-        public int index = 0;
-        public int lineIndex = 0;
-        public int columnIndex = 0;
+        public Position position = new();
         public int LineNumber {
             set
             {}
             get
             {
-                return lineIndex + 1;
+                return position.LineNumber;
             }
         }
         public int ColumnNumber
@@ -142,154 +224,29 @@ namespace Parser
             {}
             get
             {
-                return columnIndex + 1;
+                return position.ColumnNumber;
             }
         }
-        public Token(string _type, string _value, int _index, int _lineIndex, int _columnIndex)
+        public Token(string _type, string _value, int index, int lineIndex, int columnIndex)
         {
             type = _type;
             value = _value;
-            index = _index;
-            lineIndex = _lineIndex;
-            columnIndex = _columnIndex;
+            position.index = index;
+            position.lineIndex = lineIndex;
+            position.columnIndex = columnIndex;
+        }
+
+        public Token(string _type, string _value, Position _position)
+        {
+            type = _type;
+            value = _value;
+            position = _position;
         }
     }
 
-    public delegate string? TokenValidator(ref string text, int startIndex, out int endIndex);
+    public delegate string? TokenValidator(ref string text, int startIndex, out bool newlined);
 
-    // public class Term
-    // {
-    //     private Group? group;
-    //     private readonly string groupNameOrTerminal = "";
-    //     public Group? Group 
-    //     {
-    //         set
-    //         {} 
-    //         get
-    //         {
-    //             if (group == null)
-    //             {
-    //                 if (Parser.specification.TryGetValue(groupNameOrTerminal, out Group? _group))
-    //                 {
-    //                     group = _group;
-    //                 }
-    //             }
-    //             return group;
-    //         }
-    //     }
-    //     public string Value 
-    //     {
-    //         set
-    //         {}
-    //         get
-    //         {
-    //             return groupNameOrTerminal;
-    //         }
-    //     }
-    //     public bool IsTerminal
-    //     {
-    //         set
-    //         {}
-    //         get
-    //         {
-    //             return Group == null;
-    //         }
-    //     }
-    //     public bool repeatable = false;
-    //     public bool optional = false;
-    //     public Term(string _groupNameOrTerminal, bool _repeatable = false, bool _optional = false)
-    //     {
-    //         groupNameOrTerminal = _groupNameOrTerminal;
-    //         repeatable = _repeatable;
-    //         optional = _optional;
-    //     }
-
-    //     public Term(Group _group, bool _repeatable = false, bool _optional = false)
-    //     {
-    //         group = _group;
-    //         repeatable = _repeatable;
-    //         optional = _optional;
-    //     }
-
-    //     public Term()
-    //     {
-
-    //     }
-    // }
-
-    public static class Specification
-    {
-        // dictionary mapping symbol (type) to expression (group)
-        // if the parser can't find a symbol in the dictionary, it will assume that it should check for exact match (keyword)
-        public static Dictionary<string, Group> nonterminals = new() {
-            {
-                /* <program> ::= {<line>}* */
-                "program", new Group(true, true, "line")
-            },
-            // {
-            //     /* <line-wrapper> ::= <newline> <line> | <line> */
-            //     "line-wrapper", new Group(new OrderedGroup("newline", "line"), "line", "newline")
-            // },
-            {
-                /* <line> ::= 
-                    | <line-content> {comment}
-                    | <separator-newline> <line-content> {comment}
-                    | <separator-newline> {comment}
-                    | {comment}
-                */
-                "line", new Group(
-                    new OrderedGroup(
-                        new Group("line-content", new OrderedGroup("separator-newline", "line-content"), "separator-newline"), 
-                        new Group(true, "comment")
-                    ),
-                    new Group(true, "comment")
-                )
-            },
-            {
-                "line-content", new Group("command-line", "text")
-            },
-            {
-                /* <command-line> ::= '@' <command> */
-                "command-line", new OrderedGroup("command-prefix", "command")
-            },
-            {
-                /* <command> ::= 
-                    | <conversation-command> 
-                    | <enter-command>
-                    | <speak-command>
-                    | ... 
-                */
-                "command", new Group("conversation-command", "enter-command", "speak-command", "label-command", "jump-command", "option-command")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "conversation-command", new OrderedGroup("conversation", "separator", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "enter-command", new OrderedGroup("enter", "separator", "id", new OrderedGroup(true, "separator", "string"))
-            },
-            {
-                /* <speak-command> ::= 'speak' <string-or-id> 
-                   
-                   <string-or-id> ::= <string> | <id>
-                */
-                "speak-command", new OrderedGroup("speak", "separator", new Group("string", "id"))
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "label-command", new OrderedGroup("label", "separator", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "jump-command", new OrderedGroup("jump", "separator", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "option-command", new OrderedGroup("option", "separator", "id", "separator", "string")
-            },
-        };
-    } 
+    
 
 
     // in BNF terms: an expression
@@ -386,31 +343,7 @@ namespace Parser
 
     public class Parser 
     {
-
-        
-
-        
-
-        static TokenValidator CreateMatchExact(string toMatch)
-        {
-            return (ref string text, int startIndex, out int endIndex) => {
-                endIndex = startIndex;
-                int matchIndex = 0;
-
-                while (startIndex < text.Length && matchIndex < toMatch.Length)
-                {
-                    // Console.WriteLine($"Matching {matchIndex} {text[startIndex]} - {toMatch[matchIndex]}");
-                    if (text[startIndex] != toMatch[matchIndex])
-                    {
-                        return null;
-                    }
-                    matchIndex += 1;
-                    startIndex += 1;
-                }
-                endIndex = startIndex;
-                return toMatch;
-            };
-        }
+        public bool debug = true;
 
         class TrieNode
         {
@@ -458,458 +391,11 @@ namespace Parser
             }
         }
 
-        // static TokenValidator CreateMatchExactAny(IEnumerable<string> toMatchAny)
-        // {
-        //     TrieNode root = new();
-        //     foreach (string s in toMatchAny)
-        //     {
-        //         root.Add(s);
-        //     }
-
-        //     return (ref string text, int startIndex, out int endIndex) => {
-        //         endIndex = startIndex;
-        //         int matchIndex = 0;
-        //         while (startIndex < text.Length && matchIndex < toMatch.Length)
-        //         {
-        //             if (text[startIndex] != toMatch[matchIndex])
-        //             {
-        //                 return null;
-        //             }
-        //             matchIndex += 1;
-        //             startIndex += 1;
-        //         }
-        //         endIndex = startIndex;
-        //         return toMatch;
-        //     };
-        // }
-
-        public Dictionary<string, TokenValidator> terminals = new()
+        public List<Token> Parse(ref string text, out List<ErrorInfo> errors, Group group, Position? position = null)//int index = 0)
         {
-            {
-                "newline", CreateMatchExact("\n")
-            },
-            {
-                "separator-newline", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    endIndex = startIndex;
-                    string target = "";
+            position ??= new();
+            int index = position.index;
 
-                    if (text[startIndex] == '\n')
-                    {
-                        endIndex = startIndex + 1;
-                        return "\n";
-                    }
-
-                    while (text[startIndex] != '\n' && startIndex < text.Length)
-                    {
-                        if (!separator.ContainsKey(text[startIndex]))
-                        {
-                            // if anything but space and tab is found
-                            return null;
-                        }
-
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    endIndex = startIndex;
-                    return target;
-                }
-            },
-            {
-                "separator", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    endIndex = startIndex;
-                    string target = "";
-
-                    while (separator.ContainsKey(text[startIndex]) && startIndex < text.Length)
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    endIndex = startIndex;
-                    return target;
-                }
-            },
-            {
-                "command-prefix", CreateMatchExact("@")
-            },
-            {
-                "comment", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    endIndex = startIndex;
-                    string target = "";
-
-                    if (text[startIndex] != '/')
-                    {
-                        return null;
-                    }
-                    if (text[startIndex + 1] != '/')
-                    {
-                        return null;
-                    }
-
-
-                    while (text[startIndex] != '\n' && startIndex < text.Length)
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    endIndex = startIndex;
-                    return target;
-                }
-            },
-            {
-                "string", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    endIndex = startIndex;
-                    string target = "";
-
-                    // check for " at the start
-                    if (text[startIndex] != '"')
-                    {
-                        return null;
-                    }
-
-                    target += '"';
-
-                    startIndex += 1;
-
-                    while (text[startIndex] != '"' && text[startIndex] != '\n' && startIndex < text.Length)
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    // no ending " found
-                    if (startIndex == text.Length || text[startIndex] == '\n')
-                    {
-                        return null;
-                    }
-
-                    target += '"';
-
-                    // skip last " for end index
-                    endIndex = startIndex + 1;
-                    return target;
-                }
-            },
-            {
-                "text", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    endIndex = startIndex;
-                    string target = "";
-
-                    // text lines can only start on the beginning of the program, or after a new line
-                    if (startIndex != 0)
-                    {
-                        if (text[startIndex - 1] != '\n')
-                        {
-                            return null;
-                        }
-                    }
-
-                    while (text[startIndex] != '\n' && startIndex < text.Length && !(text[startIndex] == '/' && text[startIndex + 1] == '/')) //predict error here
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    if (target.Length == 0)
-                    {
-                        return null;
-                    }
-
-                    endIndex = startIndex;
-                    return target;
-                }
-            },
-            {
-                "conversation", CreateMatchExact("conversation")
-            },
-            {
-                "enter", CreateMatchExact("enter")
-            },
-            {
-                "speak", CreateMatchExact("speak")
-            },
-            {
-                "label", CreateMatchExact("label")
-            },
-            {
-                "jump", CreateMatchExact("jump")
-            },
-            {
-                "option", CreateMatchExact("option")
-            },
-            {
-                "id", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    string target = "";
-
-                    while (!whitespace.ContainsKey(text[startIndex]) && startIndex < text.Length && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    endIndex = startIndex;
-                    return target;
-                }
-            },
-            {
-                "word", (ref string text, int startIndex, out int endIndex) => {
-                    
-                    string target = "";
-
-                    while (!whitespace.ContainsKey(text[startIndex]) && startIndex < text.Length && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
-                    {
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
-
-                    endIndex = startIndex;
-                    return target;
-                }
-            },
-            
-            
-            
-        };
-
-        public string text = "";
-        public int index = 0;
-        private int newlineCount = 0;
-        private int lineColumnCount = 0;
-        public static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\t', true}, {'\n', true}};
-        public static readonly Dictionary<char, bool> separator = new() {{' ', true}, {'\t', true}};
-
-        void AdvanceIndex()
-        {
-            // check if passed newline
-            if (text[index] == '\n')
-            {
-                newlineCount += 1;
-                lineColumnCount = 0;
-            }
-            else
-            {
-                lineColumnCount += 1;
-            }
-
-            index += 1;
-        }
-
-        public Token? GetNextToken()//out Token? whitespaceToken)
-        {
-            // whitespaceToken = null;
-            // string whitespaceValue = "";
-            // int whitespaceStartIndex = index;
-            // int whitespaceLineIndex = newlineCount;
-            // int whitespaceColumnIndex = lineColumnCount;
-            // skip white space
-            while (!ReachedEnd() && whitespace.ContainsKey(text[index]))
-            {
-                // whitespaceValue += text[index];
-                AdvanceIndex();
-            }
-
-            // if (whitespaceValue.Length > 0)
-            // {
-            //     whitespaceToken = new("whitespace", whitespaceValue, whitespaceStartIndex, whitespaceLineIndex, whitespaceColumnIndex);
-            // }
-
-            if (!HasMoreTokens())
-            {
-                Console.WriteLine("GetNextToken - no more tokens!!");
-                return null;
-            }
-
-            // find terminal
-            foreach (string key in terminals.Keys)
-            {
-                TokenValidator validator = terminals[key];
-                string? value = validator.Invoke(ref text, index, out int endIndex);
-                
-                if (value == null)
-                {
-                    continue;
-                }
-
-                int startIndex = index;
-                int startColumnCount = lineColumnCount;
-
-                // index = endIndex;
-                while (index < endIndex)
-                {
-                    AdvanceIndex();  
-                }
-                
-
-                return new(key, value, startIndex, newlineCount, startColumnCount);
-            }
-            
-            // if no matching terminal, just be null
-            // Console.WriteLine("GetNextToken - no token found :[");
-            return null;
-        }
-
-        bool ReachedEnd()
-        {
-            return index >= text.Length;
-        }
-
-        bool HasMoreTokens()
-        {
-            return !ReachedEnd();
-        }
-    
-        Token? leadingToken = null;
-
-        List<Token> parsedTokens = new();
-
-        // public Token? Consume(Group group, int callstack = 0)
-        // {
-
-        //     // Console.WriteLine($"{callstack} Consuming {group}");
-
-        //     if (group is OrderedGroup)
-        //     {
-        //         // OrderedGroup
-        //         foreach (Term term in group.terms)
-        //         {
-        //             Token? consumedToken;
-        //             // for each term, check for match, otherwise return null
-        //             // must be matched in order, that is why it has to return null on fail
-        //             // matches can be deep, so make sure state is saved here somehow?
-        //             if (term.Group != null)
-        //             {
-        //                 consumedToken = Consume(term.Group, callstack + 1);
-        //                 if (term.repeatable)
-        //                 {
-        //                     while (consumedToken != null)
-        //                     {
-        //                         // Console.WriteLine($"Consuming Repeatable {term.Group}");
-        //                         consumedToken = Consume(term.Group, callstack + 1);
-        //                     }
-        //                 }
-        //             }
-        //             else
-        //             {
-        //                 consumedToken = Consume(term.Value, callstack + 1);
-        //                 if (term.repeatable)
-        //                 {
-        //                     while (consumedToken != null)
-        //                     {
-        //                         // Console.WriteLine($"Consuming Repeatable <{term.Value}>");
-        //                         consumedToken = Consume(term.Value, callstack + 1);
-        //                     }
-        //                 }
-        //             }
-
-        //             if (term.optional)
-        //             {
-        //                 continue;
-        //             }
-
-        //             if (!term.repeatable && consumedToken == null)
-        //             {
-        //                 return null;
-        //             }
-        //         }
-
-        //         return leadingToken;
-        //     }
-        //     else
-        //     {
-        //         // OrGroup aka Group
-        //         Token? consumedToken = null;
-
-        //         foreach (Term term in group.terms)
-        //         {
-        //             // for each term, check for match, otherwise continue
-        //             // matches can be deep, so make sure state is saved here somehow?
-        //             if (term.Group != null)
-        //             {
-        //                 consumedToken = Consume(term.Group, callstack + 1);
-        //                 if (term.repeatable)
-        //                 {
-        //                     while (consumedToken != null)
-        //                     {
-        //                         // Console.WriteLine($"Consuming Repeatable <{term.Group}>");
-        //                         consumedToken = Consume(term.Group, callstack + 1);
-        //                     }
-        //                 }
-        //             }
-        //             else
-        //             {
-        //                 consumedToken = Consume(term.Value, callstack + 1);
-        //                 if (term.repeatable)
-        //                 {
-        //                     while (consumedToken != null)
-        //                     {
-        //                         // Console.WriteLine($"Consuming Repeatable <{term.Value}>");
-        //                         consumedToken = Consume(term.Value, callstack + 1);
-        //                     }
-        //                 }
-        //             }
-
-        //             if (consumedToken != null)
-        //             {
-        //                 break;
-        //             }
-        //         }
-
-        //         return consumedToken;
-        //     }
-        // }
-
-        // public Token? Consume(string groupNameOrTerminal, int callstack = 0)
-        // {
-
-        //     if (leadingToken == null)
-        //     {
-        //         Console.WriteLine("Error no predicted token");
-        //         return null;
-        //     }
-
-        //     // Console.WriteLine($"{callstack} Consuming <{groupNameOrTerminal}> - predicted: <{leadingToken.type}>");
-
-        //     if (Terminals.ContainsKey(groupNameOrTerminal))
-        //     {
-        //         // string? value = Terminals[groupNameOrTerminal].Invoke(ref tokenizer.text, tokenizer.index, out int endIndex);
-        //         if (groupNameOrTerminal == leadingToken.type)
-        //         {
-        //             // Console.WriteLine($"found token match [{leadingToken.type}] [{leadingToken.value}]");
-        //             Token token = leadingToken;
-
-        //             leadingToken = tokenizer.GetNextToken();//out Token? whitespaceToken);
-
-        //             // if (whitespaceToken != null)
-        //             // {
-        //             //     parsedTokens.Add(whitespaceToken);
-        //             // }
-
-        //             parsedTokens.Add(token);
-
-        //             return token;
-        //         }
-        //         // return tokenizer.GetNextToken(); // or something that means true??
-        //         return null;
-        //     }
-
-        //     if (Tokenizer.specification.TryGetValue(groupNameOrTerminal, out Group? group))
-        //     {
-        //         return Consume(group, callstack + 1);
-        //     }
-
-        //     return null;
-        // }
-
-        public List<Token> Parse(ref string text, List<ErrorInfo> errors, Group group, int index = 0)
-        {
             if (Specification.nonterminals.TryGetValue(group.value, out Group? specGroup))
             {
                 specGroup.value = group.value;
@@ -919,47 +405,68 @@ namespace Parser
             // Console.WriteLine($"prediction - {group.value}");
 
             List<Token> parsedTokens = new();
+            errors = new();
 
-            if (group.children.Count == 0)
+                    
+            // if group is repeatable, it will parse UNTIL there is a failure
+            // if group is not repeatable, it will only call this block once
+            for (int iter = 0; (iter < 1 && !group.repeatable) || group.repeatable; iter++)
             {
-                bool success = false;
 
-                // check terminal
-                if (terminals.TryGetValue(group.value, out TokenValidator? validator))
+                if (group.children.Count == 0)
                 {
-                    string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
-                    if (tokenValue != null)
+                    bool success = false;
+
+                    // check terminal
+                    if (Specification.terminals.TryGetValue(group.value, out TokenValidator? validator))
                     {
-                        // found valid and matching token
-                        Token token = new(group.value, tokenValue, index, 0, 0);
-                        parsedTokens.Add(token);
-                        success = true;
+                        string? tokenValue = validator.Invoke(ref text, index, out bool newlined);
+                        if (tokenValue != null)
+                        {
+                            // found valid and matching token
+                            Token token = new(group.value, tokenValue, position);
+                            parsedTokens.Add(token);
+                            success = true;
+
+                            if (newlined)
+                            {
+                                position.lineIndex += 1;   
+                            }
+                        }
+                        else
+                        {
+                            success = false;
+                            errors.Add(new("Parse", $"Unexpected Token. Expected [{group.value}]"));
+                            // break;
+                        }
                     }
+
+                    // if terminal doesnt match, look for one that does
+                    // foreach (string type in terminals.Keys)
+                    // {
+                    //     validator = terminals[type];
+                    //     string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
+                    //     if (tokenValue != null)
+                    //     {
+                    //         // found valid token
+                    //         Token token = new(group.value, tokenValue, index, 0, 0);
+                    //         parsedTokens.Add(token);
+                    //     }
+                    // }
+
+                    string successText = success ? $"SCSS [{parsedTokens[0].value}]" : "FAIL";
+                    Console.WriteLine($"checking {group.value} - {successText}");
+                    // return parsedTokens;
+                    if (success)
+                    {
+                        continue;
+                    }
+                    // break repeatable
+                    break;
                 }
 
-                // if terminal doesnt match, look for one that does
-                // foreach (string type in terminals.Keys)
-                // {
-                //     validator = terminals[type];
-                //     string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
-                //     if (tokenValue != null)
-                //     {
-                //         // found valid token
-                //         Token token = new(group.value, tokenValue, index, 0, 0);
-                //         parsedTokens.Add(token);
-                //     }
-                // }
-
-                string successText = success ? $"SCSS [{parsedTokens[0].value}]" : "FAIL";
-                Console.WriteLine($"checking {group.value} - {successText}");
-                return parsedTokens;
-            }
-           
-
-            for (int iter = 0; ((iter < 1 && !group.repeatable) || group.repeatable) && iter < 200; iter++)
-            {
                 
-                int nextIndex = parsedTokens.Count > 0 ? parsedTokens[^1].index + parsedTokens[^1].value.Length : index;
+                int nextIndex = parsedTokens.Count > 0 ? parsedTokens[^1].position.index + parsedTokens[^1].value.Length : index;
                 if (parsedTokens.Count > 0)
                 {
                     Console.WriteLine($"next index: [{nextIndex}] last token: [{parsedTokens[^1].value}]");
@@ -968,7 +475,8 @@ namespace Parser
 
                 if (nextIndex >= text.Length)
                 {
-                    return parsedTokens;
+                    break;
+                    // return parsedTokens;
                 }
 
                 // check group
@@ -976,40 +484,76 @@ namespace Parser
                 {
                     List<Token> groupTokens = new();
 
+                    bool success = true;
+
                     // check all success
                     foreach (Group child in group.children)
                     {
+                        
                         int groupNextIndex = nextIndex;
                         if (groupTokens.Count > 0)
                         {
-                            groupNextIndex = groupTokens[^1].index + groupTokens[^1].value.Length;
+                            groupNextIndex = groupTokens[^1].position.index + groupTokens[^1].value.Length;
                         }
 
-                        List<Token> resultingTokens = Parse(ref text, errors, child, groupNextIndex);
+                        List<Token> resultingTokens = Parse(ref text, out List<ErrorInfo> parsedErrors, child, new(groupNextIndex));//groupNextIndex);
 
-                        if (resultingTokens.Count == 0 && !child.optional)
+                        if (resultingTokens.Count == 0)
                         {
-                            break;
+                            if (!child.optional)
+                            {
+                                errors.AddRange(parsedErrors);
+                                success = false;
+                                // break ordered group
+                                break;
+                            }
                         }
 
                         groupTokens.AddRange(resultingTokens);
                     }
 
+                    string successText = success ? "SCSS" : "FAIL";
+                    Console.WriteLine($"checking all success - {successText} - {group.value}");
+
                     parsedTokens.AddRange(groupTokens);
+
+                    if (!success)
+                    {
+                        // break repeatable
+                        break;
+                    }
                     
                 }
                 else
                 {
+                    bool success = false;
+
+                    List<ErrorInfo> groupErrors = new();
+
                     // check one success
                     foreach (Group child in group.children)
                     {
-                        List<Token> resultingTokens = Parse(ref text, errors, child, nextIndex);
+                        List<Token> resultingTokens = Parse(ref text, out List<ErrorInfo> parsedErrors, child, new(nextIndex));//nextIndex);
 
                         if (resultingTokens.Count > 0)
                         {
+                            success = true;
                             parsedTokens.AddRange(resultingTokens);
                             break;
                         }
+                        else
+                        {
+                            groupErrors.AddRange(parsedErrors);
+                        }
+                    }
+
+                    string successText = success ? "SCSS" : "FAIL";
+                    Console.WriteLine($"checking one success - {successText} - {group.value}");
+
+                    if (!success)
+                    {
+                        errors.AddRange(groupErrors);
+                        break;
                     }
                 }
             }
@@ -1017,14 +561,25 @@ namespace Parser
             return parsedTokens;
         }
 
-        public List<Token> Parse(ref string text, List<ErrorInfo> errors, string type, int index = 0)
+        public List<Token> Parse(ref string text, out List<ErrorInfo> errors, string type, Position? position = null)//int index = 0)
         {
+            position ??= new();
+
+            int index = position.index;
+            errors = new();
             if (Specification.nonterminals.TryGetValue(type, out Group? group))
             {
                 
                 group.value = type;
-                return Parse(ref text, errors, group, index);
-                
+                List<Token> groupTokens = Parse(ref text, out List<ErrorInfo> parsedErrors, group, position);//index);
+                errors.AddRange(parsedErrors);
+
+                foreach (Token token in groupTokens)
+                {
+                    Position.CalculateLineAndColumn(ref text, token.position);
+                }
+
+                return groupTokens;
             }
 
             List<Token> parsedTokens = new();
@@ -1035,105 +590,23 @@ namespace Parser
             }
             
             // check terminal
-            if (terminals.TryGetValue(type, out TokenValidator? validator))
+            if (Specification.terminals.TryGetValue(type, out TokenValidator? validator))
             {
-                string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
+                string? tokenValue = validator.Invoke(ref text, index, out bool newlined);
                 if (tokenValue != null)
                 {
                     // found valid token
-                    Token token = new(type, tokenValue, index, 0, 0);
+                    Token token = new(type, tokenValue, position);
                     parsedTokens.Add(token);
+                }
+                else
+                {
+                    errors.Add(new("Parse (String Terminal)", "Unexpected Token"));
                 }
             }
 
             return parsedTokens;
         }
-
-        // public List<Token> Parse(string text, out string error, string type = "program")
-        // {
-        //     error = "";
-
-        //     Console.WriteLine("parsing");
-        //     // tokenizer = new(text);
-
-        //     parsedTokens = new();
-
-        //     // leadingToken = tokenizer.GetNextToken();//out Token? whitespaceToken);
-
-        //     // if (whitespaceToken != null)
-        //     // {
-        //     //     parsedTokens.Add(whitespaceToken);
-        //     // }
-
-        //     // if (leadingToken == null)
-        //     // {
-        //     //     return parsedTokens;
-        //     // }
-
-        //     // test for getting all tokens
-
-        //     // int iter = 0;
-        //     // while (leadingToken != null && iter < 100)
-        //     // {
-        //     //     Console.WriteLine($"token: TYPE: [{leadingToken.type}], VALUE: [{leadingToken.value}]");
-        //     //     leadingToken = tokenizer.GetNextToken();
-        //     //     iter++;
-        //     // }
-
-        //     // int iter = 0;
-        //     // Token? consumedToken = Consume(type);
-        //     // if (consumedToken != null)
-        //     // {
-        //     //     Console.WriteLine($"Successfully consumed [{type}]");
-        //     // }
-        //     // else
-        //     // {
-        //     //     if (leadingToken != null)
-        //     //     {
-        //     //         error = $"Expected token [{leadingToken.type}]";
-        //     //     }
-        //     //     else
-        //     //     {
-        //     //         error = $"Failed to consume [{type}]";
-        //     //     }
-                
-        //     // }
-
-        //     return parsedTokens;
-
-
-
-        //     // while (consumedToken != null && iter < 200)
-        //     // {
-        //     //     Console.WriteLine($"consumedToken: TYPE: [{consumedToken.type}], VALUE: [{consumedToken.value}]");
-        //     //     consumedToken = Consume("program");
-        //     //     iter++;
-        //     // }
-            
-
-
-        //     // return program : command | text | comment
-        //     // Token? returnedToken = Eat(leadingToken.type);
-        //     // if (returnedToken != null)
-        //     // {
-        //     //     Console.WriteLine($"returned token - [{returnedToken.type}] [{returnedToken.value}]");
-        //     // }
-
-        //     // while (tokenizer.GetNextToken(out Token? token) != null)
-        //     // {
-        //     //     if (token != null)
-        //     //     {
-        //     //         Console.WriteLine($"TOKEN - TYPE: [{token.type}], VALUE: [{token.value}]");
-        //     //     }
-        //     //     else
-        //     //     {
-        //     //         Console.WriteLine($"TOKEN - NULL");
-        //     //     }
-        //     // }
-            
-        // }
     }
-
-    
 
 }
