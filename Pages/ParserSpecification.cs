@@ -77,6 +77,9 @@ namespace Parser
                 /* <conversation-command> ::= 'conversation' <id> */
                 "option-command", new OrderedGroup("option", "separator", "id", "separator", "string")
             },
+            {
+                "separator-newline", new OrderedGroup(new Group(true, "separator"), "newline")
+            }
         };
 
         public static Dictionary<string, TokenValidator> terminals = new()
@@ -84,34 +87,34 @@ namespace Parser
             {
                 "newline", CreateMatchExact("\n", true)
             },
-            {
-                "separator-newline", (ref string text, int startIndex, out bool newlined) => {
-                    newlined = true;
+            // {
+            //     "separator-newline", (ref string text, int startIndex, out bool newlined) => {
+            //         newlined = true;
                     
-                    string target = "";
+            //         string target = "";
 
-                    if (text[startIndex] == '\n')
-                    {
+            //         if (text[startIndex] == '\n')
+            //         {
                         
-                        return "\n";
-                    }
+            //             return "\n";
+            //         }
 
-                    while (startIndex < text.Length && text[startIndex] != '\n')
-                    {
-                        if (!separator.ContainsKey(text[startIndex]))
-                        {
-                            // if anything but space and tab is found
-                            return null;
-                        }
+            //         while (startIndex < text.Length && text[startIndex] != '\n')
+            //         {
+            //             if (!separator.ContainsKey(text[startIndex]))
+            //             {
+            //                 // if anything but space and tab is found
+            //                 return null;
+            //             }
 
-                        target += text[startIndex];
-                        startIndex += 1;
-                    }
+            //             target += text[startIndex];
+            //             startIndex += 1;
+            //         }
 
                     
-                    return target;
-                }
-            },
+            //         return target;
+            //     }
+            // },
             {
                 "separator", (ref string text, int startIndex, out bool newlined) => {
                     newlined = false;
