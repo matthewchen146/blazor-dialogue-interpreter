@@ -5,7 +5,9 @@
 @conversation Greeting
 
 // characters enter the conversation
-@enter personA personB // comments can also go on the side
+// the name is optional, and can be edited directly outside of the dialogue
+@enter personA "Takeshi" // comments can also go on the side
+@enter personB "Mary"
 
 // "speak" changes who is talking (changes the name in the header)
 @speak personA 
@@ -21,8 +23,6 @@ How about you?
 
 @speak personB 
 Well, I could be better...
-
-@speak personA
 
 // options can be defined for the player to choose from
 // when chosen, they will fire events in the game, 
