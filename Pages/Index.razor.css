@@ -33,12 +33,19 @@ main {
 
 .editor-column.right {
     display: grid;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: 50% 50%;
 }
 
-.script-tools {
+.toolbar {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
     padding-top: var(--toolbar-padding-top);
 }
+
+/* .script-tools {
+    
+} */
 
 .script-container {
     position: relative;
@@ -63,6 +70,9 @@ main {
     resize: none;
 
     padding-left: var(--line-number-width);
+
+    color: transparent;
+    caret-color: white;
 }
 
 .script-view {
@@ -147,10 +157,12 @@ main {
     top: 0;
     left: 0;
     width: 100%;
-    display: flex;
-    align-items: center;
-    padding-top: var(--toolbar-padding-top);
     background-color: var(--editor-background-color);
+}
+
+.log-container {
+    display: grid;
+    grid-template-rows: 1fr var(--toolbar-height);
 }
 
 .log {
@@ -159,4 +171,5 @@ main {
     white-space: break-spaces;
     color: white;
 }
+
 
