@@ -91,7 +91,7 @@ namespace Parser
 
         public override string ToString()
         {
-            return (type.Length > 0 ? $"{type} Error " : "") + $"(Ln {LineNumber} Col {ColumnNumber}) - " + message;
+            return (type.Length > 0 ? $"{type} Error " : "") + (token != null ? $"{token.position} - " : $"{position} - ") + message;
         }
     }
 
@@ -128,6 +128,11 @@ namespace Parser
         public Position(Position position)
         {
             Set(position);
+        }
+
+        public override string ToString()
+        {
+            return $"(Ln {LineNumber} Col {ColumnNumber})";
         }
 
         public Position Clone()
@@ -335,9 +340,56 @@ namespace Parser
 
     public class OrderedGroup : Group
     {
-        public OrderedGroup(params object[] _terms) : base(_terms)
+        public OrderedGroup(bool _optional, bool _repeatable, params object[] args)
         {
+            optional = _optional;
+            repeatable = _repeatable;
+            foreach (object arg in args)
+            {
+                if (arg is string s)
+                {
+                    children.Add(new(s));
+                }
+                else if (arg is Group group)
+                {
+                    children.Add(group);
+                }
+            }
+        }
+        public OrderedGroup(bool _optional, params object[] args)
+        {
+            optional = _optional;
+            foreach (object arg in args)
+            {
+                if (arg is string s)
+                {
+                    children.Add(new(s));
+                }
+                else if (arg is Group group)
+                {
+                    children.Add(group);
+                }
+            }
+        }
 
+        public OrderedGroup(string _value)
+        {
+            value = _value;
+        }
+
+        public OrderedGroup(params object[] args)
+        {
+            foreach (object arg in args)
+            {
+                if (arg is string s)
+                {
+                    children.Add(new(s));
+                }
+                else if (arg is Group group)
+                {
+                    children.Add(group);
+                }
+            }
         }
     }
 
@@ -391,7 +443,7 @@ namespace Parser
             }
         }
 
-        public List<Token> Parse(ref string text, out List<ErrorInfo> errors, Group group, Position? position = null)//int index = 0)
+        public int Parse(ref string text, out List<Token> parsedTokens, out List<ErrorInfo> errors, Group group, Position? position = null)//int index = 0)
         {
             position ??= new();
             int index = position.index;
@@ -404,9 +456,10 @@ namespace Parser
 
             // Console.WriteLine($"prediction - {group.value}");
 
-            List<Token> parsedTokens = new();
+            parsedTokens = new();
             errors = new();
 
+            int returnCode = 1;
                     
             // if group is repeatable, it will parse UNTIL there is a failure
             // if group is not repeatable, it will only call this block once
@@ -436,38 +489,67 @@ namespace Parser
                         else
                         {
                             success = false;
-                            errors.Add(new("Parse", $"Unexpected Token. Expected [{group.value}]"));
+                            // errors.Add(new("Parse", $"Unexpected Token. Expected [{group.value}]"));
                             // break;
                         }
                     }
 
-                    // if terminal doesnt match, look for one that does
-                    // foreach (string type in terminals.Keys)
-                    // {
-                    //     validator = terminals[type];
-                    //     string? tokenValue = validator.Invoke(ref text, index, out int endIndex);
-                    //     if (tokenValue != null)
-                    //     {
-                    //         // found valid token
-                    //         Token token = new(group.value, tokenValue, index, 0, 0);
-                    //         parsedTokens.Add(token);
-                    //     }
-                    // }
+                    if (!success)
+                    {
+                        Token? unexpectedToken = null;
+                        // if terminal doesnt match, look for one that does
+                        foreach (string type in Specification.terminals.Keys)
+                        {
+                            validator = Specification.terminals[type];
+                            string? tokenValue = validator.Invoke(ref text, index, out bool _);
+                            if (tokenValue != null)
+                            {
+                                // found valid token
+                                unexpectedToken = new(type, tokenValue, position);
 
-                    string successText = success ? $"SCSS [{parsedTokens[0].value}]" : "FAIL";
-                    Console.WriteLine($"checking {group.value} - {successText}");
+                                // two lines below will allow for full token collection
+                                parsedTokens.Add(unexpectedToken);
+                                success = true;
+
+                                // return 1;
+                                // parsedTokens.Add(token);
+                                break;
+                            }
+                        }
+
+                        string unexpectedString = "";
+                        if (unexpectedToken != null)
+                        {
+                            unexpectedString = $" [{unexpectedToken.type}] ({unexpectedToken.value})";
+                            errors.Add(new("Parse", unexpectedToken, $"Unexpected Token{unexpectedString}. Expected [{group.value}]"));
+                        }
+                        else
+                        {
+                            errors.Add(new("Parse", $"Unexpected Token{unexpectedString}. Expected [{group.value}]"));
+                        }
+                    }
+
+                    if (debug)
+                    {
+                        string successText = success ? $"SCSS [{parsedTokens[0].value}]" : "FAIL";
+                        string optionalText = group.optional ? "(opt) " : "";
+                        Console.WriteLine($"checking {group.value} {optionalText}- {successText}");
+                    }
+                    
                     // return parsedTokens;
                     if (success)
                     {
                         continue;
                     }
                     // break repeatable
+                    returnCode = 0;
                     break;
                 }
 
                 
                 int nextIndex = parsedTokens.Count > 0 ? parsedTokens[^1].position.index + parsedTokens[^1].value.Length : index;
-                if (parsedTokens.Count > 0)
+
+                if (debug && parsedTokens.Count > 0)
                 {
                     Console.WriteLine($"next index: [{nextIndex}] last token: [{parsedTokens[^1].value}]");
                 }
@@ -496,9 +578,9 @@ namespace Parser
                             groupNextIndex = groupTokens[^1].position.index + groupTokens[^1].value.Length;
                         }
 
-                        List<Token> resultingTokens = Parse(ref text, out List<ErrorInfo> parsedErrors, child, new(groupNextIndex));//groupNextIndex);
+                        int result = Parse(ref text, out List<Token> resultingTokens, out List<ErrorInfo> parsedErrors, child, new(groupNextIndex));//groupNextIndex);
 
-                        if (resultingTokens.Count == 0)
+                        if (result == 0)
                         {
                             if (!child.optional)
                             {
@@ -512,14 +594,18 @@ namespace Parser
                         groupTokens.AddRange(resultingTokens);
                     }
 
-                    string successText = success ? "SCSS" : "FAIL";
-                    Console.WriteLine($"checking all success - {successText} - {group.value}");
+                    if (debug)
+                    {
+                        string successText = success ? "SCSS" : "FAIL";
+                        Console.WriteLine($"checking all success - {successText} - {group.value}");
+                    }
 
                     parsedTokens.AddRange(groupTokens);
 
                     if (!success)
                     {
                         // break repeatable
+                        returnCode = 0;
                         break;
                     }
                     
@@ -533,60 +619,68 @@ namespace Parser
                     // check one success
                     foreach (Group child in group.children)
                     {
-                        List<Token> resultingTokens = Parse(ref text, out List<ErrorInfo> parsedErrors, child, new(nextIndex));//nextIndex);
+                        int result = Parse(ref text, out List<Token> resultingTokens, out List<ErrorInfo> parsedErrors, child, new(nextIndex));//nextIndex);
 
-                        if (resultingTokens.Count > 0)
+                        if (result == 0)
+                        {
+                            groupErrors.AddRange(parsedErrors);
+                        }
+                        else
                         {
                             success = true;
                             parsedTokens.AddRange(resultingTokens);
                             break;
                         }
-                        else
-                        {
-                            groupErrors.AddRange(parsedErrors);
-                        }
                     }
 
-                    string successText = success ? "SCSS" : "FAIL";
-                    Console.WriteLine($"checking one success - {successText} - {group.value}");
+                    if (debug)
+                    {
+                        string successText = success ? "SCSS" : "FAIL";
+                        Console.WriteLine($"checking one success - {successText} - {group.value}");
+                    }
 
                     if (!success)
                     {
+                        returnCode = 0;
                         errors.AddRange(groupErrors);
+                        // break repeatable
                         break;
                     }
                 }
             }
 
-            return parsedTokens;
+            return returnCode;
         }
 
-        public List<Token> Parse(ref string text, out List<ErrorInfo> errors, string type, Position? position = null)//int index = 0)
+        public int Parse(ref string text, out List<Token> parsedTokens, out List<ErrorInfo> errors, string type, Position? position = null)//int index = 0)
         {
             position ??= new();
+            parsedTokens = new();
+            errors = new();
 
             int index = position.index;
-            errors = new();
+            
             if (Specification.nonterminals.TryGetValue(type, out Group? group))
             {
                 
                 group.value = type;
-                List<Token> groupTokens = Parse(ref text, out List<ErrorInfo> parsedErrors, group, position);//index);
-                errors.AddRange(parsedErrors);
+                int result = Parse(ref text, out parsedTokens, out List<ErrorInfo> parsedErrors, group, position);//index);
+                if (result == 0)
+                {
+                    errors.AddRange(parsedErrors);
+                }
 
-                foreach (Token token in groupTokens)
+                foreach (Token token in parsedTokens)
                 {
                     Position.CalculateLineAndColumn(ref text, token.position);
                 }
 
-                return groupTokens;
+                return result;
             }
-
-            List<Token> parsedTokens = new();
 
             if (index == text.Length)
             {
-                return parsedTokens;
+                return 1;
             }
             
             // check terminal
@@ -602,10 +696,11 @@ namespace Parser
                 else
                 {
                     errors.Add(new("Parse (String Terminal)", "Unexpected Token"));
+                    return 0;
                 }
             }
 
-            return parsedTokens;
+            return 1;
         }
     }
 

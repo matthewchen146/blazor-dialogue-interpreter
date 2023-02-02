@@ -413,8 +413,12 @@ public class DialogueInterpreter
         outDialogueData = preprocessData;
 
 
-        Parser.Parser parser = new();
-        List<Token> tokens = parser.Parse(ref rawText, out List<ErrorInfo> parsedErrors, "program");
+        Parser.Parser parser = new()
+        {
+            debug = false
+        };
+        int parseResult = parser.Parse(ref rawText, out List<Token> tokens, out List<ErrorInfo> parsedErrors, "program");
+        Console.WriteLine(parseResult == 0 ? "PARSE SUCCESS" : "PARSE FAIL");
 
         outDialogueData.tokens = tokens;
 
@@ -440,106 +444,131 @@ public class DialogueInterpreter
         }
 
         // get/create all commands
-        // for (int index = 0; index < tokens.Count; index++)
-        // {
-        //     Token token = tokens[index];
+        for (int index = 0; index < tokens.Count; index++)
+        {
+            Token token = tokens[index];
 
-        //     // Console.WriteLine($"checking for command, text: [{token.type}] [{token.value}]");
+            if (token.type == "newline" || token.type == "separator")
+            {
+                continue;
+            }
 
-        //     // check if command
-        //     if (token.type == "command-prefix")
-        //     {
+            // Console.WriteLine($"checking for command, text: [{token.type}] [{token.value}]");
+
+            // check if command
+            if (token.type == "command-prefix")
+            {
              
-        //         // Console.WriteLine("found command prefix, looking for command name");
+                // Console.WriteLine("found command prefix, looking for command name");
 
-        //         index += 1;
+                index += 1;
 
-        //         if (index == tokens.Count)
-        //         {
-        //             error = new("Parse", token, $"Unexpected end of script");
-        //             return 0;
-        //         }
+                if (index == tokens.Count)
+                {
+                    error = new("Parse", token, $"Unexpected end of script");
+                    return 0;
+                }
 
-        //         Token commandToken = tokens[index];
+                Token commandToken = tokens[index];
 
-        //         // Console.WriteLine($"found command name {commandToken.type}");
+                // Console.WriteLine($"found command name {commandToken.type}");
 
-        //         // get args
-        //         List<Token> args = new();
-        //         for (index += 1; index < tokens.Count && tokens[index].type != "comment" && tokens[index].type != "command-prefix" && tokens[index].type != "text"; index++)
-        //         {
-        //             args.Add(tokens[index]);
-        //         }
+                // get args
+                List<Token> args = new();
+                for (index += 1; 
+                    index < tokens.Count 
+                    && tokens[index].type != "comment" 
+                    && tokens[index].type != "command-prefix" 
+                    && tokens[index].type != "text"
+                    && tokens[index].type != "newline"; 
+                    index++
+                )
+                {
+                    if (tokens[index].type == "separator")
+                    {
+                        continue;
+                    }
+                    args.Add(tokens[index]);
+                }
 
-        //         index -= 1;
+                index -= 1;
 
-        //         int commandIndex = preprocessData.commands.Count; // refers to the command index in the command list, not token list
-        //         Command command = new(commandIndex, commandToken, preprocessData.conversation, args);
+                int commandIndex = preprocessData.commands.Count; // refers to the command index in the command list, not token list
+                Command command = new(commandIndex, commandToken, preprocessData.conversation, args);
 
 
-        //         // add to preprocess data
-        //         preprocessData.commands.Add(command);
+                // add to preprocess data
+                preprocessData.commands.Add(command);
 
-        //     }
-        //     else if (token.type == "text")
-        //     {
-        //         Command command = new(index, token, preprocessData.conversation, new Token[] {token});
+            }
+            else if (token.type == "text")
+            {
+                Command command = new(index, token, preprocessData.conversation, new Token[] {token});
 
-        //         // add to preprocess data
-        //         preprocessData.commands.Add(command);
-        //     }
-        //     else if (token.type != "comment")
-        //     {
-        //         error = new("Parse", token, $"Unexpected token type [{token.type}]");
-        //         errorCode = 0;
-        //         // return 0;
-        //     }
-        // }
+                // add to preprocess data
+                preprocessData.commands.Add(command);
+            }
+            else if (token.type != "comment")
+            {
+                error = new("Parse", token, $"Unexpected token type [{token.type}] ({token.value})");
+                errorCode = 0;
+                // return 0;
+            }
+        }
+
+        foreach (Command command in preprocessData.commands)
+        {
+            Console.WriteLine("COMMAND: " + command.token.type);
+            foreach (Token arg in command.args)
+            {
+                Console.WriteLine($"ARG: [{arg.type}] ({arg.value})");
+            }
+        }
 
         // // preprocess commands
-        // for (int index = 0; index < preprocessData.commands.Count; index++)
-        // {
-        //     Command command = preprocessData.commands[index];
-        //     Token token = command.token;
+        for (int index = 0; index < preprocessData.commands.Count; index++)
+        {
+            Command command = preprocessData.commands[index];
+            Token token = command.token;
 
-        //     // Console.WriteLine($"preprocess --- lookg at command {token.type}");
+            // Console.WriteLine($"preprocess --- lookg at command {token.type}");
 
-        //     if (!possibleCommands.ContainsKey(token.type))
-        //     {
-        //         error = new("Preprocess", token, $"Command [{token.type}] does not exist");
-        //         return 0;
-        //     }
+            if (!possibleCommands.ContainsKey(token.type))
+            {
+                error = new("Preprocess", token, $"Command [{token.type}] does not exist");
+                return 0;
+            }
 
 
-        //     command.conversation = preprocessData.conversation;
+            command.conversation = preprocessData.conversation;
 
-        //     int result = possibleCommands[token.type].Preprocess(preprocessData, command, out string errorMessage);
-        //     if (result == 0)
-        //     {
-        //         error = new("Preprocess", token, $"@{token.type} Error - {errorMessage}");
-        //         return 0;
-        //     }
-        // }
+            int result = possibleCommands[token.type].Preprocess(preprocessData, command, out string errorMessage);
+            if (result == 0)
+            {
+                error = new("Preprocess", token, $"@{token.type} Error - {errorMessage}");
+                return 0;
+            }
+        }
 
-        // // validate commands
-        // for (int index = 0; index < preprocessData.commands.Count; index++)
-        // {
-        //     Command command = preprocessData.commands[index];
-        //     Token token = command.token;
+        // validate commands
+        for (int index = 0; index < preprocessData.commands.Count; index++)
+        {
+            Command command = preprocessData.commands[index];
+            Token token = command.token;
 
-        //     int result = possibleCommands[token.type].Validate(preprocessData, command, out string errorMessage);
-        //     if (result == 0)
-        //     {
-        //         error = new("Validate", token, $"@{token.type} Error - {errorMessage}");
-        //         return 0;
-        //     }
+            int result = possibleCommands[token.type].Validate(preprocessData, command, out string errorMessage);
+            if (result == 0)
+            {
+                error = new("Validate", token, $"@{token.type} Error - {errorMessage}");
+                return 0;
+            }
 
-        // }
+        }
 
-        // if (errorCode == 1)
-        // {
-        //     currentDialogueData = preprocessData;
-        // }
+        if (errorCode == 1)
+        {
+            currentDialogueData = preprocessData;
+        }
 
         return errorCode;
     }

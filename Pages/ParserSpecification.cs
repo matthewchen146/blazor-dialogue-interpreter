@@ -4,8 +4,23 @@ namespace Parser
 {
     public static class Specification
     {
+        public delegate int CharValidator(ref string text, int index);
         public static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\t', true}, {'\n', true}};
         public static readonly Dictionary<char, bool> separator = new() {{' ', true}, {'\t', true}};
+        public static readonly Dictionary<char, bool> idCharacters = new();
+
+        static Specification()
+        {
+            string idChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+            foreach (char c in idChars)
+            {
+                if (!idCharacters.ContainsKey(c))
+                {
+                    idCharacters.Add(c, true);
+                }
+            }
+        }
 
         // dictionary mapping symbol (type) to expression (group)
         // if the parser can't find a symbol in the dictionary, it will assume that it should check for exact match (keyword)
@@ -15,20 +30,23 @@ namespace Parser
                 "program", new Group(true, true, "line")
             },
             // {
-            //     /* <line-wrapper> ::= <newline> <line> | <line> */
-            //     "line-wrapper", new Group(new OrderedGroup("newline", "line"), "line", "newline")
+            //     /* <line-wrapper> ::= <line>{<comment>} */
+            //     "line-wrapper", new OrderedGroup(new Group(true, "separator-newline"), "line", new Group(true, "comment"))
             // },
             {
                 /* <line> ::= 
-                    | <line-content> {comment}
-                    | <separator-newline> <line-content> {comment}
-                    | <separator-newline> {comment}
+                    | <line-content>{comment}
+                    | <separator-newline><line-content>{comment}
+                    | <separator-newline>{comment}
                     | {comment}
                 */
                 "line", new Group(
+                    "separator-newline",
+                    
                     new OrderedGroup(
-                        new Group("line-content", new OrderedGroup("separator-newline", "line-content"), "separator-newline"),
-                        new Group("separator"),
+                        "line-content",
+                        // new Group("line-content", new OrderedGroup("separator-newline", "line-content"), "separator-newline"),
+                        new Group(true, "separator"),
                         new Group(true, "comment")
                     ),
                     new Group(true, "comment")
@@ -87,34 +105,6 @@ namespace Parser
             {
                 "newline", CreateMatchExact("\n", true)
             },
-            // {
-            //     "separator-newline", (ref string text, int startIndex, out bool newlined) => {
-            //         newlined = true;
-                    
-            //         string target = "";
-
-            //         if (text[startIndex] == '\n')
-            //         {
-                        
-            //             return "\n";
-            //         }
-
-            //         while (startIndex < text.Length && text[startIndex] != '\n')
-            //         {
-            //             if (!separator.ContainsKey(text[startIndex]))
-            //             {
-            //                 // if anything but space and tab is found
-            //                 return null;
-            //             }
-
-            //             target += text[startIndex];
-            //             startIndex += 1;
-            //         }
-
-                    
-            //         return target;
-            //     }
-            // },
             {
                 "separator", (ref string text, int startIndex, out bool newlined) => {
                     newlined = false;
@@ -206,8 +196,14 @@ namespace Parser
                     
                     string target = "";
 
+                    // text lines cant start with @
+                    if (text[startIndex] == '@')
+                    {
+                        return null;
+                    }
+
                     // text lines can only start on the beginning of the program, or after a new line
-                    if (startIndex != 0)
+                    if (startIndex > 0)
                     {
                         if (text[startIndex - 1] != '\n')
                         {
@@ -215,6 +211,7 @@ namespace Parser
                         }
                     }
 
+                    // break text at newline or comment
                     while (startIndex < text.Length && text[startIndex] != '\n' && !(text[startIndex] == '/' && text[startIndex + 1] == '/')) //predict error here
                     {
                         target += text[startIndex];
@@ -253,12 +250,22 @@ namespace Parser
                     newlined = false;
                     string target = "";
 
-                    while (startIndex < text.Length && !whitespace.ContainsKey(text[startIndex]) && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
+                    while (
+                        startIndex < text.Length && !whitespace.ContainsKey(text[startIndex]) && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
                     {
+                        if (!idCharacters.ContainsKey(text[startIndex]))
+                        {
+                            return null;
+                        }
+
                         target += text[startIndex];
                         startIndex += 1;
                     }
 
+                    if (target.Length == 0)
+                    {
+                        return null;
+                    }
                     
                     return target;
                 }
@@ -272,6 +279,11 @@ namespace Parser
                     {
                         target += text[startIndex];
                         startIndex += 1;
+                    }
+
+                    if (target.Length == 0)
+                    {
+                        return null;
                     }
 
                     
@@ -301,6 +313,53 @@ namespace Parser
                 }
                 
                 return toMatch;
+            };
+        }
+
+        static TokenValidator CreateMatchCharacters(string validChars, string endChars)
+        {
+            Dictionary<char, bool> validCharacters = new();
+            Dictionary<char, bool> endCharacters = new();
+
+            bool containsNewline = false;
+
+            foreach (char c in validChars)
+            {
+                if (!validCharacters.ContainsKey(c))
+                {
+                    validCharacters.Add(c, true);
+                }
+                if (c == '\n')
+                {
+                    containsNewline = true;
+                }
+            }
+
+            foreach (char c in endChars)
+            {
+                if (!endCharacters.ContainsKey(c))
+                {
+                    endCharacters.Add(c, true);
+                }
+            }
+
+            return (ref string text, int startIndex, out bool newlined) => {
+                newlined = containsNewline;
+
+                string target = "";
+
+                while (startIndex < text.Length && !endCharacters.ContainsKey(text[startIndex]))
+                {
+                    // Console.WriteLine($"Matching {matchIndex} {text[startIndex]} - {toMatch[matchIndex]}");
+                    if (!validCharacters.ContainsKey(text[startIndex]))
+                    {
+                        return null;
+                    }
+                    target += text[startIndex];
+                    startIndex += 1;
+                }
+                
+                return target;
             };
         }
     } 
