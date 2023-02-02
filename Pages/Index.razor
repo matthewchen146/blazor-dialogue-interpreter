@@ -152,12 +152,28 @@
             // set up span
             List<string> classes = new() {token.type};
 
+            string wrapper = "";
+            if (token.type == "string")
+            {
+                wrapper = "\"\"";
+            }
+
             if (index > 0 && dialogueData.tokens[index - 1].type == "command-prefix")
             {
                 classes.Add("command");
             }
 
-            scriptLines[token.position.lineIndex] += $"<span class='{string.Join(' ', classes)}'>{token.value}</span>";
+            string content = "";
+            if (wrapper.Length > 0)
+            {
+                content = wrapper[0] + token.value + wrapper[1];
+            }
+            else
+            {
+                content = token.value;
+            }
+
+            scriptLines[token.position.lineIndex] += $"<span class='{string.Join(' ', classes)}'>{content}</span>";
 
         }
 
@@ -329,6 +345,10 @@
 
         dialogueInterpreter.events.On("optionsCleared", async () => {
             await CallBySelector(".options-container", "while (element.firstChild) {element.removeChild(element.lastChild);}");
+        });
+
+        dialogueInterpreter.events.On("error", async () => {
+            Log("Dialogue Error - " + (string)dialogueInterpreter.events.Args[0], (int)dialogueInterpreter.events.Args[1]);
         });
     }
 
