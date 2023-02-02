@@ -657,7 +657,6 @@ public class DialogueInterpreter
                 return 0;
             }
 
-
             command.conversation = preprocessData.conversation;
 
             int result = possibleCommands[token.type].Preprocess(preprocessData, command, out string errorMessage);
@@ -708,9 +707,17 @@ public class DialogueInterpreter
         }
         DialogueData dialogueData = currentDialogueData;
         nextReady = true;
+
         while (currentIndex < dialogueData.commands.Count)
         {
             Command command = dialogueData.commands[currentIndex];
+
+            if (command.conversation != dialogueData.conversation)
+            {
+                Console.WriteLine("End of conversation");
+                break;
+            }
+
             int result = possibleCommands[command.token.type].Resolve(dialogueData, command, out string error);
             // Console.WriteLine($"command: {command.token}, index: {currentIndex}, result: {result}");
             if (result == 0)
@@ -738,6 +745,8 @@ public class DialogueInterpreter
             currentIndex += 1;
         }
 
+        currentIterator = null;
+
     }
 
     public int StartConversation(string conversationName, out string error)
@@ -755,12 +764,14 @@ public class DialogueInterpreter
             return 0;
         }
 
+        currentDialogueData.conversation = currentDialogueData.conversations[conversationName];
+
         // clear current options
         currentOptions.Clear();
         events.Trigger("optionsCleared");
 
         // reset command index
-        currentIndex = 0;
+        currentIndex = currentDialogueData.conversation.index;
 
         // create enumerable
         currentIterator = StartDialogueEnumerator();   
