@@ -316,22 +316,22 @@
         await UpdateScript(script); *@
 
         // set up dialogue interpreter interaction
-        dialogueInterpreter.events.On("textChanged", async () => {
-            string text = (string)dialogueInterpreter.events.Args[0];
+        dialogueInterpreter.Events.On("textChanged", async () => {
+            string text = (string)dialogueInterpreter.Events.Args[0];
             Log("text changed " + text);
             await CallBySelector(".dialogue-box", "element.textContent = `" + text + "`;");
         });
 
-        dialogueInterpreter.events.On("speakerChanged", async () => {
-            string speaker = (string)dialogueInterpreter.events.Args[0];
+        dialogueInterpreter.Events.On("speakerChanged", async () => {
+            string speaker = (string)dialogueInterpreter.Events.Args[0];
             Log("speaker changed " + speaker);
             await CallBySelector(".speaker-label", "element.textContent = `" + speaker + "`;");
         });
 
-        dialogueInterpreter.events.On("optionAdded", async () => {
-            int index = (int)dialogueInterpreter.events.Args[0];
-            string text = (string)dialogueInterpreter.events.Args[1];
-            string labelName = (string)dialogueInterpreter.events.Args[2];
+        dialogueInterpreter.Events.On("optionAdded", async () => {
+            int index = (int)dialogueInterpreter.Events.Args[0];
+            string text = (string)dialogueInterpreter.Events.Args[1];
+            string labelName = (string)dialogueInterpreter.Events.Args[2];
             await CallBySelector(".options-container", $@"
             const button = document.createElement('button'); 
             button.textContent = `{text}`;
@@ -343,12 +343,12 @@
             );
         });
 
-        dialogueInterpreter.events.On("optionsCleared", async () => {
+        dialogueInterpreter.Events.On("optionsCleared", async () => {
             await CallBySelector(".options-container", "while (element.firstChild) {element.removeChild(element.lastChild);}");
         });
 
-        dialogueInterpreter.events.On("error", async () => {
-            Log("Dialogue Error - " + (string)dialogueInterpreter.events.Args[0], (int)dialogueInterpreter.events.Args[1]);
+        dialogueInterpreter.Events.On("error", async () => {
+            Log("Dialogue Error - " + (string)dialogueInterpreter.Events.Args[0], (int)dialogueInterpreter.Events.Args[1]);
         });
     }
 

@@ -66,38 +66,48 @@ namespace Parser
                     | <speak-command>
                     | ... 
                 */
-                "command", new Group("conversation-command", "enter-command", "speak-command", "label-command", "jump-command", "option-command")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "conversation-command", new OrderedGroup("conversation", "separator", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "enter-command", new OrderedGroup("enter", "separator", "id", new OrderedGroup(true, "separator", "string"))
-            },
-            {
-                /* <speak-command> ::= 'speak' <string-or-id> 
-                   
-                   <string-or-id> ::= <string> | <id>
-                */
-                "speak-command", new OrderedGroup("speak", "separator", new Group("string", "id"))
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "label-command", new OrderedGroup("label", "separator", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "jump-command", new OrderedGroup("jump", "separator", "id")
-            },
-            {
-                /* <conversation-command> ::= 'conversation' <id> */
-                "option-command", new OrderedGroup("option", "separator", "id", "separator", "string")
+                "command", new Group()//"conversation-command", "enter-command", "speak-command", "label-command", "jump-command", "option-command")
             },
             {
                 "separator-newline", new OrderedGroup(new Group(true, "separator"), "newline")
-            }
+            },
+            // {
+            //     "expression", new Group(
+            //         new OrderedGroup("left-parenthesis", new Group(true, "separator"), "expression-content", new Group(true, "separator"), "right-parenthesis"), 
+            //         "expression-content"
+            //     )
+            // },
+            // {
+            //     "expression-content", new OrderedGroup(new Group("expression", "float"), new Group(true, "separator"), "operator", new Group(true, "separator"), new Group("expression", "float"))
+            // }
+            // {
+            //     /* <conversation-command> ::= 'conversation' <id> */
+            //     "conversation-command", new OrderedGroup("conversation", "separator", "id")
+            // },
+            // {
+            //     /* <conversation-command> ::= 'conversation' <id> */
+            //     "enter-command", new OrderedGroup("enter", "separator", "id", new OrderedGroup(true, "separator", "string"))
+            // },
+            // {
+            //     /* <speak-command> ::= 'speak' <string-or-id> 
+                   
+            //        <string-or-id> ::= <string> | <id>
+            //     */
+            //     "speak-command", new OrderedGroup("speak", "separator", new Group("string", "id"))
+            // },
+            // {
+            //     /* <conversation-command> ::= 'conversation' <id> */
+            //     "label-command", new OrderedGroup("label", "separator", "id")
+            // },
+            // {
+            //     /* <conversation-command> ::= 'conversation' <id> */
+            //     "jump-command", new OrderedGroup("jump", "separator", "id")
+            // },
+            // {
+            //     /* <conversation-command> ::= 'conversation' <id> */
+            //     "option-command", new OrderedGroup("option", "separator", "id", "separator", "string")
+            // },
+            
         };
 
         public static Dictionary<string, TokenValidator> terminals = new()
@@ -129,6 +139,12 @@ namespace Parser
             {
                 "command-prefix", CreateMatchExact("@")
             },
+            // {
+            //     "left-parenthesis", CreateMatchExact("(")
+            // },
+            // {
+            //     "right-parenthesis", CreateMatchExact(")")
+            // },
             {
                 "comment", (ref string text, int startIndex, out bool newlined) => {
                     newlined = false;
@@ -227,28 +243,65 @@ namespace Parser
                     return target;
                 }
             },
+            // {
+            //     "conversation", CreateMatchExact("conversation")
+            // },
+            // {
+            //     "enter", CreateMatchExact("enter")
+            // },
+            // {
+            //     "speak", CreateMatchExact("speak")
+            // },
+            // {
+            //     "label", CreateMatchExact("label")
+            // },
+            // {
+            //     "jump", CreateMatchExact("jump")
+            // },
+            // {
+            //     "option", CreateMatchExact("option")
+            // },
+            
             {
-                "conversation", CreateMatchExact("conversation")
+                "float", (ref string text, int startIndex, out bool newlined) => {
+                    newlined = false;
+
+                    string target = "";
+                    while (startIndex < text.Length && !whitespace.ContainsKey(text[startIndex]) && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
+                    {
+                        target += text[startIndex];
+                        startIndex++;
+                    }
+
+                    if (float.TryParse(target, System.Globalization.NumberStyles.Number, null, out float result))
+                    {
+                        return target;
+                    }
+                    
+                    return null;
+                }
             },
             {
-                "enter", CreateMatchExact("enter")
-            },
-            {
-                "speak", CreateMatchExact("speak")
-            },
-            {
-                "label", CreateMatchExact("label")
-            },
-            {
-                "jump", CreateMatchExact("jump")
-            },
-            {
-                "option", CreateMatchExact("option")
+                "operator", (ref string text, int startIndex, out bool newlined) => {
+                    newlined = false;
+                    
+                    if ("+-*/".Contains(text[startIndex]))
+                    {
+                        return text[startIndex].ToString();
+                    }
+
+                    return null;
+                }
             },
             {
                 "id", (ref string text, int startIndex, out bool newlined) => {
                     newlined = false;
                     string target = "";
+                    
+                    if ("0123456789".Contains(text[startIndex]))
+                    {
+                        return null;
+                    }
 
                     while (
                         startIndex < text.Length && !whitespace.ContainsKey(text[startIndex]) && !(text[startIndex] == '/' && text[startIndex + 1] == '/'))
@@ -295,7 +348,7 @@ namespace Parser
             
         };
 
-        static TokenValidator CreateMatchExact(string toMatch, bool containsNewline = false)
+        public static TokenValidator CreateMatchExact(string toMatch, bool containsNewline = false)
         {
             return (ref string text, int startIndex, out bool newlined) => {
                 newlined = containsNewline;

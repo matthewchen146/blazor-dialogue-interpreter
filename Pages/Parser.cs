@@ -315,6 +315,17 @@ namespace Parser
             }
         }
 
+        public Group? Add(Group group)
+        {
+            children.Add(group);
+            return group;
+        }
+
+        public Group? Add(string arg)
+        {
+            return Add(new Group(arg));
+        }
+
 
         public override string ToString()
         {
@@ -473,6 +484,7 @@ namespace Parser
                     // check terminal
                     if (Specification.terminals.TryGetValue(group.value, out TokenValidator? validator))
                     {
+                        // Console.WriteLine("found terminal validator " + group.value);
                         string? tokenValue = validator.Invoke(ref text, index, out bool newlined);
                         if (tokenValue != null)
                         {
@@ -481,6 +493,7 @@ namespace Parser
                             parsedTokens.Add(token);
                             success = true;
 
+                            // this not working yet, but i dont need it to work so IDC (for now)
                             if (newlined)
                             {
                                 position.lineIndex += 1;   
