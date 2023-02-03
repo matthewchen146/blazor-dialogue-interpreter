@@ -80,7 +80,7 @@ window.addEventListener('resize', resizeView.bind(this, false));
 
 textArea.addEventListener('input', () => {
     clearTimeout(scriptCheckTimeout);
-    scriptCheckTimeout = setTimeout(updateScript, 200);
+    scriptCheckTimeout = setTimeout(updateScript, 100);
 
     resizeView();
 });

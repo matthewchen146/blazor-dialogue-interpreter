@@ -37,6 +37,7 @@ public class DialogueInterpreter
     {
         public Dictionary<string, Character> characters = new();
         public Dictionary<string, int> labels = new();
+        public Dictionary<string, float> numbers = new(); // maps ID to Float
         public int index = 0;
         // public List<Command> commands = new();
         public Conversation(int _index)
@@ -55,18 +56,18 @@ public class DialogueInterpreter
         public Dictionary<string, Conversation> conversations = new();
         public Conversation? conversation = null;
         public List<Token> tokens = new();
-
+        public List<int> jumpStack = new();
         public DialogueData(DialogueInterpreter _dialogueInterpreter)
         {
             dialogueInterpreter = _dialogueInterpreter;
         }
     }
-    delegate int CommandPreprocessor(DialogueData dialogueData, Command command, out string error);
-    delegate int CommandValidator(DialogueData dialogueData, Command command, out string error);
+    public delegate int CommandPreprocessor(DialogueData dialogueData, Command command, out string error);
+    public delegate int CommandValidator(DialogueData dialogueData, Command command, out string error);
 
-    delegate int CommandResolver(DialogueData dialogueData, Command command, out string error);
+    public delegate int CommandResolver(DialogueData dialogueData, Command command, out string error);
 
-    class CommandArgType
+    public class CommandArgType
     {
         public Dictionary<string, bool> types = new();
         public bool optional = false;
@@ -110,12 +111,13 @@ public class DialogueInterpreter
         }
     }
 
-    class CommandContainer 
+    public class CommandContainer 
     {
         public CommandPreprocessor? commandPreprocessor;
         public CommandValidator? commandValidator;
         public CommandResolver? commandResolver;
         public List<CommandArgType> argTypes = new();
+        public string description = "";
         public CommandContainer(CommandPreprocessor? _commandPreprocessor, CommandValidator? _commandValidator, CommandResolver? _commandResolver, IEnumerable<CommandArgType> _argTypes)
         {
             commandPreprocessor = _commandPreprocessor;
@@ -134,6 +136,71 @@ public class DialogueInterpreter
         public CommandContainer()
         {
 
+        }
+
+        public void AddToSpecification(string? commandName = null)
+        {
+            if (commandName == null)
+            {
+                foreach (string key in possibleCommands.Keys)
+                {
+                    if (possibleCommands.TryGetValue(key, out CommandContainer? value)) 
+                    {
+                        if (value != null && value.Equals(this))
+                        {
+                            commandName = key;
+                        }
+                    }
+                }
+            }
+
+            if (commandName != null && Specification.nonterminals.TryGetValue("command", out Group? group))
+            {
+                string nonterminalName = $"{commandName}-command";
+
+                if (Specification.nonterminals.ContainsKey(nonterminalName))
+                {
+                    return;
+                }
+
+                // add to command group <command>
+                group.Add(nonterminalName);
+
+                // if terminal shares the same name (ex: number) -> 213.141
+                // it will add "-literal" to the end (ex: number-literal) -> "number"
+                string terminalName = $"{commandName}" + (Specification.terminals.ContainsKey(commandName) ? "-literal" : "");
+
+                // add arg types in new orderGroup <commandName-command>
+                OrderedGroup argsGroup = new();
+                argsGroup.Add(terminalName);
+
+                foreach (CommandArgType argType in argTypes)
+                {
+                    Group argGroup = new(argType.optional);
+                    foreach (string type in argType.types.Keys)
+                    {
+                        argGroup.Add(type);
+                    }
+
+                    if (argType.optional)
+                    {
+                        argsGroup.Add(new OrderedGroup(true, "separator", argGroup));
+                    }
+                    else
+                    {
+                        argsGroup.Add("separator");
+                        argsGroup.Add(argGroup);
+                    }
+                }
+
+                Specification.nonterminals.Add(nonterminalName, argsGroup);
+
+                // add terminal validator
+                Specification.terminals.Add(terminalName, Specification.CreateMatchExact(commandName, false));
+
+                // Console.WriteLine($"auto added command nonterm [{nonterminalName}] and term [{terminalName}]");
+                
+            }
         }
 
         public int Preprocess(DialogueData dialogueData, Command command, out string error)
@@ -189,7 +256,7 @@ public class DialogueInterpreter
         }
     }
 
-    private static readonly Dictionary<string, CommandContainer> possibleCommands = new() {
+    public static readonly Dictionary<string, CommandContainer> possibleCommands = new() {
         {"conversation", new CommandContainer(
             (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
@@ -283,7 +350,7 @@ public class DialogueInterpreter
                     name = command.args[0].value;
                 }
 
-                dialogueData.dialogueInterpreter.events.Trigger("speakerChanged", name);
+                dialogueData.dialogueInterpreter.Events.Trigger("speakerChanged", name);
                 return 1;
             },
             new CommandArgType("id", "string")
@@ -293,7 +360,7 @@ public class DialogueInterpreter
             null,
             (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                dialogueData.dialogueInterpreter.events.Trigger("textChanged", ProcessText(ref command.args[0].value, dialogueData, out string _processError));
+                dialogueData.dialogueInterpreter.Events.Trigger("textChanged", ProcessText(ref command.args[0].value, dialogueData, out string _processError));
                 error = _processError;
                 dialogueData.dialogueInterpreter.nextReady = false;
                 return 1;
@@ -328,7 +395,8 @@ public class DialogueInterpreter
 
                 dialogueData.dialogueInterpreter.currentOptions.Add(labelName);
 
-                dialogueData.dialogueInterpreter.events.Trigger("optionAdded", index, ProcessText(ref text, dialogueData, out string _processError), labelName);
+                dialogueData.dialogueInterpreter.Events.Trigger("optionAdded", index, ProcessText(ref text, dialogueData, out string _processError), labelName);
+
                 error = _processError;
                 
                 // Console.WriteLine("checking for last option");
@@ -345,6 +413,120 @@ public class DialogueInterpreter
                 return 1;
             },
             new CommandArgType("id"), new CommandArgType("string")
+        )},
+        {"jumpeq", new CommandContainer(
+            null,
+            (DialogueData dialogueData, Command command, out string error) => {
+                error = "";
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string labelName = command.args[0].value;
+                if (!command.conversation.labels.ContainsKey(labelName))
+                {
+                    error = $"Jump label \"{labelName}\" does not exist in this conversation";
+                    return 0;
+                }
+                return 1;
+            },
+            (DialogueData dialogueData, Command command, out string error) => {
+                error = "";
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                List<float> numbers = new();
+                for (int i = 1; i < command.args.Count; i++)
+                {
+                    Token arg = command.args[i];
+                    if (arg.type == "id")
+                    {
+                        if (command.conversation.numbers.TryGetValue(arg.value, out float number))
+                        {
+                            numbers.Add(number);
+                            continue;
+                        }
+                        error = $"No number with id ({arg.value}) has been created in this conversation";
+                        return 0;
+                    }
+                    numbers.Add(float.Parse(arg.value, System.Globalization.NumberStyles.Number));
+                }
+
+                if (numbers[0] == numbers[1])
+                {
+                    string labelName = command.args[0].value;
+                    int labelIndex = command.conversation.labels[labelName];
+
+                    dialogueData.jumpStack.Add(dialogueData.dialogueInterpreter.currentIndex);
+
+                    dialogueData.dialogueInterpreter.currentIndex = labelIndex;
+                }
+                
+                return 1;
+            },
+            new CommandArgType("id"), new CommandArgType("id", "float"), new CommandArgType("id", "float")
+        )},
+        {"jumpgt", new CommandContainer(
+            null,
+            (DialogueData dialogueData, Command command, out string error) => {
+                error = "";
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string labelName = command.args[0].value;
+                if (!command.conversation.labels.ContainsKey(labelName))
+                {
+                    error = $"Jump label \"{labelName}\" does not exist in this conversation";
+                    return 0;
+                }
+                return 1;
+            },
+            (DialogueData dialogueData, Command command, out string error) => {
+                error = "";
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                List<float> numbers = new();
+                for (int i = 1; i < command.args.Count; i++)
+                {
+                    Token arg = command.args[i];
+                    if (arg.type == "id")
+                    {
+                        if (command.conversation.numbers.TryGetValue(arg.value, out float number))
+                        {
+                            numbers.Add(number);
+                            continue;
+                        }
+                        error = $"No number with id ({arg.value}) has been created in this conversation";
+                        return 0;
+                    }
+                    numbers.Add(float.Parse(arg.value, System.Globalization.NumberStyles.Number));
+                }
+
+                if (numbers[0] > numbers[1])
+                {
+                    string labelName = command.args[0].value;
+                    int labelIndex = command.conversation.labels[labelName];
+
+                    dialogueData.jumpStack.Add(dialogueData.dialogueInterpreter.currentIndex);
+
+                    dialogueData.dialogueInterpreter.currentIndex = labelIndex;
+                }
+                
+                return 1;
+            },
+            new CommandArgType("id"), new CommandArgType("id", "float"), new CommandArgType("id", "float")
         )},
         {"jump", new CommandContainer(
             null,
@@ -374,31 +556,257 @@ public class DialogueInterpreter
 
                 string labelName = command.args[0].value;
                 int labelIndex = command.conversation.labels[labelName];
+
+                dialogueData.jumpStack.Add(dialogueData.dialogueInterpreter.currentIndex);
+
                 dialogueData.dialogueInterpreter.currentIndex = labelIndex;
+      
                 return 1;
             },
             new CommandArgType("id")
+        )},
+        {"return", new CommandContainer(
+            null,
+            null,
+            (DialogueData dialogueData, Command command, out string error) => {
+                error = "";
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                if (dialogueData.jumpStack.Count > 0)
+                {
+                    int returnIndex = dialogueData.jumpStack[^1];
+                    dialogueData.jumpStack.RemoveAt(dialogueData.jumpStack.Count - 1);
+                    dialogueData.dialogueInterpreter.currentIndex = returnIndex;
+                }
+                
+                return 1;
+            }
         )},
         {"event", new CommandContainer(
             null,
             null,
             (DialogueData dialogueData, Command command, out string error) => {
                 error = "";
-                Token eventName = command.args[0];
-                dialogueData.dialogueInterpreter.events.Trigger("dialogueEvent", eventName);
+                string eventName = command.args[0].value;
+                dialogueData.dialogueInterpreter.Events.Trigger("dialogueEvent", eventName);
                 return 1;
             },
             new CommandArgType("id", "string")
+        )},
+        {"number", new CommandContainer(
+            null,
+            null,
+            (DialogueData DialogueData, Command command, out string error) => {
+                error = "";
+
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string id = command.args[0].value;
+
+                float number = 0;
+                if (command.args[1].type == "id")
+                {
+                    if (!command.conversation.numbers.ContainsKey(command.args[1].value))
+                    {
+                        error = $"No number with id ({command.args[1].value}) has been created in this conversation";
+                        return 0;
+                    }
+                    number = command.conversation.numbers[command.args[1].value];
+                }
+                else
+                {
+                    number = float.Parse(command.args[1].value, System.Globalization.NumberStyles.Number);
+                }
+                
+                command.conversation.numbers[id] = number;
+
+                return 1;
+            },
+            new CommandArgType("id"), new CommandArgType("id", "float")
+        )},
+        {"add", new CommandContainer(
+            null,
+            null,
+            (DialogueData DialogueData, Command command, out string error) => {
+                error = "";
+
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string id = command.args[0].value;
+
+                if (!command.conversation.numbers.ContainsKey(id))
+                {
+                    error = $"No number with id ({id}) has been created in this conversation";
+                    return 0;
+                }
+
+                float number = 0;
+                if (command.args[1].type == "id")
+                {
+                    if (!command.conversation.numbers.ContainsKey(command.args[1].value))
+                    {
+                        error = $"No number with id ({command.args[1].value}) has been created in this conversation";
+                        return 0;
+                    }
+                    number = command.conversation.numbers[command.args[1].value];
+                }
+                else
+                {
+                    number = float.Parse(command.args[1].value, System.Globalization.NumberStyles.Number);
+                }
+
+                command.conversation.numbers[id] = command.conversation.numbers[id] + number;
+
+                return 1;
+            },
+            new CommandArgType("id"), new CommandArgType("id", "float")
+        )},
+        {"mul", new CommandContainer(
+            null,
+            null,
+            (DialogueData DialogueData, Command command, out string error) => {
+                error = "";
+
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string id = command.args[0].value;
+
+                if (!command.conversation.numbers.ContainsKey(id))
+                {
+                    error = $"No number with id ({id}) has been created in this conversation";
+                    return 0;
+                }
+
+                float number = 0;
+                if (command.args[1].type == "id")
+                {
+                    if (!command.conversation.numbers.ContainsKey(command.args[1].value))
+                    {
+                        error = $"No number with id ({command.args[1].value}) has been created in this conversation";
+                        return 0;
+                    }
+                    number = command.conversation.numbers[command.args[1].value];
+                }
+                else
+                {
+                    number = float.Parse(command.args[1].value, System.Globalization.NumberStyles.Number);
+                }
+
+                command.conversation.numbers[id] = command.conversation.numbers[id] * number;
+
+                return 1;
+            },
+            new CommandArgType("id"), new CommandArgType("id", "float")
+        )},
+        {"div", new CommandContainer(
+            null,
+            null,
+            (DialogueData DialogueData, Command command, out string error) => {
+                error = "";
+
+                if (command.conversation == null)
+                {
+                    error = "No conversation attached to this command";
+                    return 0;
+                }
+
+                string id = command.args[0].value;
+
+                if (!command.conversation.numbers.ContainsKey(id))
+                {
+                    error = $"No number with id ({id}) has been created in this conversation";
+                    return 0;
+                }
+
+                float number = 0;
+                if (command.args[1].type == "id")
+                {
+                    if (!command.conversation.numbers.ContainsKey(command.args[1].value))
+                    {
+                        error = $"No number with id ({command.args[1].value}) has been created in this conversation";
+                        return 0;
+                    }
+                    number = command.conversation.numbers[command.args[1].value];
+                }
+                else
+                {
+                    number = float.Parse(command.args[1].value, System.Globalization.NumberStyles.Number);
+                }
+                
+                
+                command.conversation.numbers[id] = command.conversation.numbers[id] / number;
+
+                return 1;
+            },
+            new CommandArgType("id"), new CommandArgType("id", "float")
         )}
     };
 
+    // add command automatically to parser spec
+    static DialogueInterpreter()
+    {
+
+        // hacky warning
+        Dictionary<string, TokenValidator> reAdd = new();
+
+        // unfortunately, there is a parse bug that seems to ignore inputed commands and opts for id/word
+        // this is probably due to the fail safe which gets a working token if there is no success with a predicted token.
+        // but, there is something I overlooked, which causes it to seem to never match the command literals
+        // so it loops through each key instead, where id and word appear first, since the command literals are added last
+        // so to fix temporarily, remove Id and Word after adding commands, then add them back after to keep Id and Word last :]
+        foreach (string key in new string[] {"id", "word"})
+        {
+            if (Specification.terminals.Remove(key, out TokenValidator? validator))
+            {
+                reAdd.Add(key, validator);
+            }
+        }
+
+        // add possible commands to specification
+        foreach (string key in possibleCommands.Keys)
+        {
+            if (key == "text")
+            {
+                continue;
+            }
+            possibleCommands[key].AddToSpecification(key);
+        }
+
+        // readd the removed keys to the dictionary
+        foreach (string key in reAdd.Keys)
+        {
+            Specification.terminals.Add(key, reAdd[key]);
+        }
+        
+    }
     
     private IEnumerator<int>? currentIterator;
-    public string currentIteratorError = "";
     private int currentIndex = 0;
     List<string> currentOptions = new();
     public DialogueData? currentDialogueData;
-    public EventEmitter events {get; private set;} = new();
+    public EventEmitter Events {get; private set;} = new();
 
     private bool nextReady = false;
 
@@ -406,6 +814,13 @@ public class DialogueInterpreter
     static string ProcessText(ref string text, DialogueData dialogueData, out string error)
     {
         error = "";
+
+        if (dialogueData.conversation == null)
+        {
+            error = "No conversation loaded";
+            return "";
+        }
+
         string newText = "";
         for (int i = 0; i < text.Length; i++)
         {
@@ -420,11 +835,16 @@ public class DialogueInterpreter
                         id += text[i];
                         i++;
                     }
-                    if (dialogueData.conversation != null && dialogueData.conversation.characters.TryGetValue(id, out Character? character))
+
+
+                    if (dialogueData.conversation.characters.TryGetValue(id, out Character? character))
                     {
                         newText += character.name;
                     }
-                    // else if () // implement variabless here!
+                    else if (dialogueData.conversation.numbers.TryGetValue(id, out float number))
+                    {
+                        newText += number.ToString();
+                    }
                     else
                     {
                         error = $"Failed to process text. ID ({id}) is not assigned";
@@ -459,6 +879,14 @@ public class DialogueInterpreter
         currentIterator.MoveNext();
         return 1;
     }
+
+    public void Stop()
+    {
+        currentIterator = null;
+        currentOptions.Clear();
+        Events.Trigger("optionsCleared");
+    }
+
 
     public int ChooseOption(int index, out string error)
     {
@@ -506,9 +934,63 @@ public class DialogueInterpreter
         }
 
         currentOptions.Clear();
-        events.Trigger("optionsCleared");
+        Events.Trigger("optionsCleared");
         
         return Next();
+    }
+
+    public int SetNumber(string id, float value)
+    {
+        if (currentDialogueData == null || currentDialogueData.conversation == null)
+        {
+            return 0;
+        }
+        currentDialogueData.conversation.numbers[id] = value;
+        return 1;
+    }
+
+    public bool TryGetNumber(string id, out float value)
+    {
+        if (currentDialogueData == null || currentDialogueData.conversation == null)
+        {
+            value = 0;
+            return false;
+        }
+
+        if (currentDialogueData.conversation.numbers.TryGetValue(id, out value))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    public int SetCharacterName(string id, string name)
+    {
+        if (currentDialogueData == null || currentDialogueData.conversation == null)
+        {
+            return 0;
+        }
+        if (currentDialogueData.conversation.characters.TryGetValue(id, out Character? character))
+        {
+            character.name = name;
+            return 1;
+        }
+        return 0;
+    }
+
+    public bool TryGetCharacterName(string id, out string name)
+    {
+        name = "";
+        if (currentDialogueData == null || currentDialogueData.conversation == null)
+        {
+            return false;
+        }
+        if (currentDialogueData.conversation.characters.TryGetValue(id, out Character? character))
+        {
+            name = character.name;
+            return true;
+        }
+        return false;
     }
 
     public int Load(string rawText, out ErrorInfo? error, out DialogueData outDialogueData)
@@ -535,13 +1017,16 @@ public class DialogueInterpreter
         //     return 0;
         // }
         
+        if (parser.debug)
+        {
+            Console.WriteLine("TOKENS FOUND:");
 
-        // Console.WriteLine("TOKENS FOUND:");
-
-        // foreach (Token token in tokens)
-        // {
-        //     Console.WriteLine($"(Ln {token.LineNumber}, Col {token.ColumnNumber}) TYPE: [{token.type}] VALUE: [{token.value}]");
-        // }
+            foreach (Token token in tokens)
+            {
+                Console.WriteLine($"(Ln {token.LineNumber}, Col {token.ColumnNumber}) TYPE: [{token.type}] VALUE: [{token.value}]");
+            }
+        }
+        
 
         // Console.WriteLine("ERRORS FOUND:");
 
@@ -596,14 +1081,20 @@ public class DialogueInterpreter
                     index++
                 )
                 {
+                    // skip separator
                     if (tokens[index].type == "separator")
                     {
                         continue;
                     }
 
+                    // remove quotes from string
                     if (tokens[index].type == "string")
                     {
                         tokens[index].value = tokens[index].value.Substring(1, tokens[index].value.Length - 2);
+                    }
+                    else if (tokens[index].type == "")
+                    {
+
                     }
 
                     args.Add(tokens[index]);
@@ -714,7 +1205,7 @@ public class DialogueInterpreter
 
             if (command.conversation != dialogueData.conversation)
             {
-                Console.WriteLine("End of conversation");
+                Stop();
                 break;
             }
 
@@ -722,18 +1213,15 @@ public class DialogueInterpreter
             // Console.WriteLine($"command: {command.token}, index: {currentIndex}, result: {result}");
             if (result == 0)
             {
-                Console.WriteLine(error);
-                currentIteratorError = error;
-                events.Trigger("error", error, 2);
-                Console.WriteLine($"breaking with error: {error}");
+                Events.Trigger("error", error, 2);
                 yield break;
             }
             else
             {
                 if (error.Length > 0)
                 {
-                    events.Trigger("error", error, 1);
-                    events.Trigger("warning", error);
+                    Events.Trigger("error", error, 1);
+                    Events.Trigger("warning", error);
                 }
             }
 
@@ -768,7 +1256,7 @@ public class DialogueInterpreter
 
         // clear current options
         currentOptions.Clear();
-        events.Trigger("optionsCleared");
+        Events.Trigger("optionsCleared");
 
         // reset command index
         currentIndex = currentDialogueData.conversation.index;
