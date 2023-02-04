@@ -853,7 +853,12 @@ public class DialogueInterpreter
                 }
 
             }
-
+            
+            if (i == text.Length)
+            {
+                break;
+            }
+            
             if (text[i] == '\\')
             {
                 if (!(i + 1 < text.Length && text[i + 1] != '%'))
@@ -1001,6 +1006,7 @@ public class DialogueInterpreter
 
         outDialogueData = preprocessData;
 
+        rawText = rawText.Replace("\r\n", "\n").Replace('\r','\n');
 
         Parser.Parser parser = new()
         {

@@ -73,14 +73,16 @@ main {
 
     color: transparent;
     caret-color: white;
+    pointer-events: none;
+    user-select: none;
 }
 
 .script-view {
     position: absolute;
     top: 0;
     left: 0;
-    pointer-events: none;
-    user-select: none;
+    /* pointer-events: none; */
+    /* user-select: none; */
     font-size: var(--font-size);
     white-space: break-spaces;
 

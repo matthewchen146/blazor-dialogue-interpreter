@@ -1,10 +1,13 @@
-
+using System;
+using System.Collections;
+using System.Collections.Generic;
 #nullable enable
 namespace Parser
 {
     public static class Specification
     {
         public delegate int CharValidator(ref string text, int index);
+        // public static readonly Dictionary<char, bool> newlines = new() {{'\r\n', true}, {'\n', true}, {'\r', true}};
         public static readonly Dictionary<char, bool> whitespace = new() {{' ', true}, {'\t', true}, {'\n', true}};
         public static readonly Dictionary<char, bool> separator = new() {{' ', true}, {'\t', true}};
         public static readonly Dictionary<char, bool> idCharacters = new();
@@ -114,6 +117,24 @@ namespace Parser
         {
             {
                 "newline", CreateMatchExact("\n", true)
+                // "newline", (ref string text, int startIndex, out bool newlined) => {
+                //     newlined = true;
+                    
+                //     string target = "";
+
+                //     while (startIndex < text.Length && separator.ContainsKey(text[startIndex]))
+                //     {
+                //         target += text[startIndex];
+                //         startIndex += 1;
+                //     }
+
+                //     if (target.Length == 0)
+                //     {
+                //         return null;
+                //     }
+                    
+                //     return target;
+                // }
             },
             {
                 "separator", (ref string text, int startIndex, out bool newlined) => {
