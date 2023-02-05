@@ -882,6 +882,12 @@ public class DialogueInterpreter
         }
         nextReady = true;
         currentIterator.MoveNext();
+
+        if (currentIterator == null)
+        {
+            return 0;
+        }
+
         return 1;
     }
 
