@@ -10,105 +10,90 @@
     <link href="css/app.css" rel="stylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="blazor-dialogue-interpreter.styles.css" rel="stylesheet" />
-    <style>
-        .script-view .script-line {
-            position: relative;
-        }
-
-        .script-view .script-line::before {
-            content: attr(data-line);
-            position: absolute;
-            transform: translateX(-100%);
-            width: var(--line-number-width);
-            height: 100%;
-            color: white;
-
-            background-color: rgba(90, 69, 42, .5);
-        }
-
-        .script-view .script-line:nth-child(even)::before {
-            background-color: rgba(161, 118, 60, .5);
-        }
-
-        .script-view .command-prefix {
-            color: rgb(241, 95, 205);
-        }
-
-        .script-view .command {
-            color: rgb(57, 176, 255);
-            pointer-events: all;
-        }
-
-        .script-view .command:hover {
-            background-color: rgba(255, 255, 255, .1);
-        }
-
-        .script-view .id {
-            color: rgb(142, 206, 248);
-        }
-
-        .script-view .float {
-            color: rgb(160, 248, 142);
-        }
-
-        .script-view .operator {
-            color: rgb(248, 142, 248);
-        }
-
-        .script-view .label {
-            color: rgb(250, 199, 59);
-        }
-
-        .script-view .comment {
-            color: rgb(75, 110, 55);
-        }
-
-        .script-view .string {
-            color: rgb(241, 134, 71);
-        }
-
-        .script-view .error {
-            background-color: rgba(255, 47, 47, 0.5);
-        }
-
-        .log-line {
-            position: relative;
-            display: inline-block;
-            width: 100%;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        /* .log-line::after {
-            position: absolute;
-            left: 0;
-            top: 0;
-            content: " ";
-            width: 100%;
-            height: 100%;
-            border-bottom: 1px solid gray;
-            pointer-events: none;
-        } */
-
-        .log .level-1 {
-            color: rgb(255, 187, 60);
-        }
-
-        .log .level-2 {
-            color: rgb(255, 60, 60);
-        }
-
-        .option-button {
-            width: 100%;
-            padding: .2rem;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="script-style.css">
 </head>
 
 <body>
     <main>
-        
+        <section class="editor">
+            <section class="editor-hbox">
+                <section class="editor-window script-window">
+                    <div class="editor-toolbar">
+                        <button id="download">Download</button>
+                        <button id="import">Import</button>
+                    </div>
+                    <div class="script-container">
+                        <pre class="script-view" contenteditable="true" spellcheck="false"></pre>
+                    </div>
+                </section>
+                <section class="editor-vbox">
+                    <section class="editor-window test-window">
+                        <div class="editor-toolbar">
+                            <button id="run">Run Conversation</button>
+                            <select id="conversation"></select>
+                        </div>
+                    </section>
+                    <section class="editor-window log-window">
+                        <div class="editor-toolbar">
+                            <button id="log-clear">Clear</button>
+                        </div>
+                        <div class="log-container">
+                            <pre class="log"></pre>
+                        </div>
+                    </section>
+                </section>
+            </section>
+            
+            <!-- <section class="editor-column left">
+                <div class="script-tools toolbar">
+                    <button id="download">Download</button>
+                    <button id="import">Import</button>
+                </div>
+                <div class="script-container">
+                    <pre class="script-view" contenteditable="true" spellcheck="false"></pre>
+                </div>
+            </section>
+    
+            <section class="editor-column right">
+                <div class="test">
+                    <div class="dialogue-container">
+                        <div class="dialogue-header">
+                            <div class="speaker-label">Speaker</div>
+                        </div>
+                        <div class="dialogue-box">dialogue box</div>
+                        <div class="dialogue-footer">
+                            <button class="next-button" id="next">Next</button>
+                        </div>
+                    </div>
+                    <div class="options-container">
+    
+                    </div>
+                    <div class="test-tools toolbar">
+                        <button id="run">Run</button>
+                        <select class="conversation-selector"></select>
+                    </div>
+                </div>
+    
+                <div class="log-container">
+                    <pre class="log"></pre>
+                    <div class="log-tools toolbar">
+                        <button class="log-clear" id="log-clear">Clear</button>
+                    </div>
+                </div>
+            </section> -->
+        </section> 
     </main>
+    <script src="./editor.js"></script>
+    <script src="./index.js"></script>
     <script>
+
+        // const editorHContainers = document.querySelectorAll('.editor-hbox>*:nth-child(n+2)');
+        // console.log(editorHContainers);
+
+        
+
+
         window.dotNetReferenceMap = new Map();
 
         window.setDotNetReference = (id, reference) => {
@@ -141,11 +126,8 @@
             return result;
         }
 
-        window.evalJavaScript = (string) => {
-            eval(string);
-        }
     </script>
-    <div id="app">
+    <div id="app" style="pointer-events: none;">
         <svg class="loading-progress">
             <circle r="40%" cx="50%" cy="50%" />
             <circle r="40%" cx="50%" cy="50%" />

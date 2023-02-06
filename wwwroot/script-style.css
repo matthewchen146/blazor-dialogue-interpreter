@@ -1,0 +1,90 @@
+.script-view .script-line {
+    position: relative;
+}
+
+.script-view .script-line::before {
+    content: attr(data-line);
+    position: absolute;
+    transform: translateX(-100%);
+    width: var(--line-number-width);
+    height: 100%;
+    color: white;
+
+    background-color: rgba(90, 69, 42, .5);
+}
+
+.script-view .script-line:nth-child(even)::before {
+    background-color: rgba(161, 118, 60, .5);
+}
+
+.script-view .command-prefix {
+    color: rgb(241, 95, 205);
+}
+
+.script-view .command {
+    color: rgb(57, 176, 255);
+    pointer-events: all;
+}
+
+.script-view .command:hover {
+    background-color: rgba(255, 255, 255, .1);
+}
+
+.script-view .id {
+    color: rgb(142, 206, 248);
+}
+
+.script-view .float {
+    color: rgb(160, 248, 142);
+}
+
+.script-view .operator {
+    color: rgb(248, 142, 248);
+}
+
+.script-view .label {
+    color: rgb(250, 199, 59);
+}
+
+.script-view .comment {
+    color: rgb(75, 110, 55);
+}
+
+.script-view .string {
+    color: rgb(241, 134, 71);
+}
+
+.script-view .error {
+    background-color: rgba(255, 47, 47, 0.5);
+}
+
+.log-line {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* .log-line::after {
+    position: absolute;
+    left: 0;
+    top: 0;
+    content: " ";
+    width: 100%;
+    height: 100%;
+    border-bottom: 1px solid gray;
+    pointer-events: none;
+} */
+
+.log .level-1 {
+    color: rgb(255, 187, 60);
+}
+
+.log .level-2 {
+    color: rgb(255, 60, 60);
+}
+
+.option-button {
+    width: 100%;
+    padding: .2rem;
+}

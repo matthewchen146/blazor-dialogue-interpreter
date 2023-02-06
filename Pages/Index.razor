@@ -5,49 +5,6 @@
 
 <PageTitle>Dialogue Interpreter</PageTitle>
 
-<main>
-    <section class="editor">
-        <section class="editor-column left">
-            <div class="script-tools toolbar">
-                <button @onclick="HandleDownloadClick">Download</button>
-                <button @onclick="HandleImportClick">Import</button>
-            </div>
-            <div class="script-container">
-                <textarea class="script" spellcheck="false"></textarea>
-                <pre class="script-view" contenteditable="true"></pre>
-            </div>
-        </section>
-
-        <section class="editor-column right">
-            <div class="test">
-                <div class="dialogue-container">
-                    <div class="dialogue-header">
-                        <div class="speaker-label">Speaker</div>
-                    </div>
-                    <div class="dialogue-box">dialogue box</div>
-                    <div class="dialogue-footer">
-                        <button class="next-button" @onclick="HandleNextClick">Next</button>
-                    </div>
-                </div>
-                <div class="options-container">
-
-                </div>
-                <div class="test-tools toolbar">
-                    <button @onclick="HandleRunClick">Run</button>
-                    <select class="conversation-selector"></select>
-                </div>
-            </div>
-
-            <div class="log-container">
-                <pre class="log"></pre>
-                <div class="log-tools toolbar">
-                    <button class="log-clear" @onclick="HandleLogClearClick">Clear</button>
-                </div>
-            </div>
-        </section>
-    </section>
-</main>
-
 @code
 {
     private DialogueInterpreter dialogueInterpreter = new();
@@ -297,23 +254,16 @@
 
         await JS.InvokeVoidAsync("setDotNetReference", "index", DotNetObjectReference.Create(this));
 
-        string initJS = await Http.GetStringAsync("index.js");
+        @* string initJS = await Http.GetStringAsync("index.js"); *@
         
-        await JS.InvokeVoidAsync("callFunction", initJS);
+        @* await JS.InvokeVoidAsync("callFunction", initJS); *@
 
-        string text = await Http.GetStringAsync("examples/Test.txt");
+        @* string text = await Http.GetStringAsync("examples/Test.txt"); *@
 
         @* script = text; *@
 
-        await SetScript(text);
+        @* await SetScript(text); *@
 
-        @* // set textarea value
-        await CallBySelector(".script", $"element.value = `{script}`");
-
-        // resize textarea
-        await JS.InvokeVoidAsync("resizeView");
-
-        await UpdateScript(script); *@
 
         // set up dialogue interpreter interaction
         dialogueInterpreter.Events.On("textChanged", async () => {
