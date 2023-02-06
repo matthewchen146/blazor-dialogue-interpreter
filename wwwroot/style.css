@@ -132,15 +132,14 @@ main {
     --line-number-width: 2rem;
 }
 
-.script {
+/* .script {
     background-color: hsl(var(--theme-h), var(--theme-s), var(--theme-l));
     font-family: 'Courier New', Courier, monospace;
     font-size: var(--font-size);
     white-space: break-spaces;
 
     width: 100%;
-    
-    /* min-height: 100%; */
+
     overflow: hidden;
     resize: none;
 
@@ -150,17 +149,16 @@ main {
     caret-color: white;
     pointer-events: none;
     user-select: none;
-}
+} */
 
-.script-view {
+.script {
     position: absolute;
     top: 0;
     left: 0;
 
     width: 100%;
-    
-    /* pointer-events: none; */
-    /* user-select: none; */
+    height: 100%;
+
     font-size: var(--font-size);
     white-space: break-spaces;
 
