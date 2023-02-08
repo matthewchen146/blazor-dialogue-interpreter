@@ -75,7 +75,7 @@
     }
 
     [JSInvokable]
-    public async ValueTask UpdateScript(string newScript)
+    public async ValueTask<Dictionary<string, object>> Parse(string newScript)
     {
         script = newScript;
 
@@ -178,17 +178,21 @@
             scriptViewText += $"{newline}<span class='script-line {string.Join(' ', classes)}' data-line='{index + 1}'>{line}</span>";
         }
 
-        
+        return new() {
+            {
+                "innerHTML", scriptViewText
+            }
+        };
 
 
-        string conversationSelectorInnerHTML = "";
+        @* string conversationSelectorInnerHTML = "";
         foreach (string conversationName in dialogueData.conversations.Keys)
         {
             conversationSelectorInnerHTML += $"<option value='{conversationName}'>{conversationName}</option>";
         }
         await CallBySelector(".conversation-selector", $"element.innerHTML = args[0]", conversationSelectorInnerHTML);
 
-        await JS.InvokeVoidAsync("setScriptViewInnerHTML", scriptViewText);
+        await JS.InvokeVoidAsync("setScriptViewInnerHTML", scriptViewText); *@
 
     }
 
@@ -203,7 +207,7 @@
         // resize textarea
         await JS.InvokeVoidAsync("resizeView");
 
-        await UpdateScript(script);
+        @* await UpdateScript(script); *@
     }
     
     private async void HandleRunClick()
